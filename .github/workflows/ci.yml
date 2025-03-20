@@ -9,7 +9,7 @@ jobs:
       matrix:
         operating-system: ['ubuntu-latest']
         php-versions: ['8.2', '8.3', '8.4']
-
+        phpunit-versions: ['latest']
     steps:
       - uses: actions/checkout@v4
 
@@ -17,7 +17,7 @@ jobs:
         uses: php-actions/composer@v6
 
       - name: PHPUnit
-        uses: php-actions/phpunit@v3
+        uses: php-actions/phpunit@v4
         with:
           php_version: ${{ matrix.php-versions }}
           configuration: phpunit.xml.dist

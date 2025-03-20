@@ -1,5 +1,7 @@
 # Kaly DI
 
+[![Latest Stable Version](http://poser.pugx.org/lekoala/kaly-di/v)](https://packagist.org/packages/lekoala/kaly-di) [![Total Downloads](http://poser.pugx.org/lekoala/kaly-di/downloads)](https://packagist.org/packages/lekoala/kaly-di) [![Latest Unstable Version](http://poser.pugx.org/lekoala/kaly-di/v/unstable)](https://packagist.org/packages/lekoala/kaly-di) [![License](http://poser.pugx.org/lekoala/kaly-di/license)](https://packagist.org/packages/lekoala/kaly-di) [![PHP Version Require](http://poser.pugx.org/lekoala/kaly-di/require/php)](https://packagist.org/packages/lekoala/kaly-di)
+
 > Minimalist and Modern Dependency Injection Container
 
 Kaly DI is a lightweight and flexible dependency injection (DI) container designed for modern PHP applications.

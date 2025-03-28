@@ -12,6 +12,7 @@ Kaly DI is a lightweight and flexible dependency injection (DI) container design
 * **Clean and Minimalist Design:**  Kaly DI avoids unnecessary complexity, keeping the core concepts simple and easy to understand.
 * **No Magic, No Attributes:**  Kaly DI intentionally avoids reliance on annotations or attributes. This prevents tight coupling between your code and the DI container, promoting a cleaner architecture and greater flexibility, in line with PSR-11 principles.
 * **PHP-Based Definitions:** Define your dependencies exclusively in PHP code using a powerful `Definitions` object. This enables strong type checking, autocompletion, and refactoring support from your IDE.
+* **Auto-wiring:** Your dependencies are injected automatically based on their types. Auto-wiring can be fine tuned using `resolvers`.
 * **Invariable Results:**  Calling `->get()` with the same identifier will consistently return the same object instance, providing predictable behavior and efficient resource management. If you need a new instance, simply clone the container to get a fresh container without cached instances.
 * **Powerful Injector:** The built-in injector allows you to dynamically call methods, automatically injecting dependencies from the container or through provided arguments. This facilitates seamless integration and flexible code execution.
 * **Focus on Performance:** The implementation is very light and is designed to be very fast.
@@ -27,12 +28,11 @@ use Kaly\DI\Definitions;
 // Define dependencies
 $definitions = Definitions::create()
     ->set(\PDO::class, new \PDO('sqlite::memory:')) // Define a PDO service
-    ->parameter(MyClass::class, 'db', \PDO::class); // Inject the PDO service into MyClass
 
 // Create the container
 $container = new Container($definitions);
 
-// Get an instance of MyClass
+// Get an instance of MyClass that is using the PDO service
 $myObject = $container->get(MyClass::class);
 
 // Now you can use the object
@@ -69,7 +69,7 @@ that interface from the container, you will get the proper object.
 
 ### Setting parameters
 
-You can use the `parameter`, `parameters` and `paramtersArray` methods to set parameters
+You can use the `parameter`, `parameters` and `parametersArray` methods to set parameters
 for a given service.
 
 Keep in mind that the parameter cannot reference another entry in the future container. If you need
@@ -96,7 +96,7 @@ You can define "resolvers" which can determine how a given class is resolved. Th
     ...->resolve(PDO::class, 'backupDb', 'backupDb')
 
 // Case 2 : when resolving pdo classes, for any name, resolve using the closure
-    ...->resolve(PDO::class, '*', function (string $name, string $class) {...}
+    ...->resolveAll(PDO::class, function (string $name, string $class) {...}
 
 // Case 3 : when resolving pdo classes, if the interface is TestObjectTwoPdosInterface, resolve using the closure
     ...->resolve(PDO::class, TestObjectTwoPdosInterface::class, function (string $name, string $class) {...}

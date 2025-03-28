@@ -383,6 +383,31 @@ class ContainerTest extends TestCase
         $this->assertSame($pdo, $inst->db);
         $this->assertSame($backupDb, $inst->backupDb);
 
+        // Resolved case using closure and resolveAll //
+        $definitions = Definitions::create()
+            ->set(PDO::class, fn(): \PDO => new PDO('sqlite::memory:'))
+            ->set('backupDbService', fn(): \PDO => new PDO('sqlite::memory:'))
+            // this means : when resolving pdo classes, for any name, resolve using the closure
+            ->resolveAll(PDO::class, function (string $name, string $class) {
+                // Using the closure, we can check the argument name and the class being resolved
+                if ($class === TestObjectTwoPdosVal::class && $name === 'backupDb') {
+                    return 'backupDbService'; // use custom service
+                }
+                return PDO::class; // default
+            })
+            ->lock();
+
+        $di = new Container($definitions);
+        $inst = $di->get(TestObjectTwoPdosVal::class);
+        $pdo = $di->get(PDO::class);
+        $backupDb = $di->get('backupDbService');
+        $this->assertInstanceOf(TestObjectTwoPdosVal::class, $inst);
+        $this->assertInstanceOf(PDO::class, $inst->db);
+        $this->assertInstanceOf(PDO::class, $inst->backupDb);
+        $this->assertNotSame($pdo, $backupDb);
+        $this->assertSame($pdo, $inst->db);
+        $this->assertSame($backupDb, $inst->backupDb);
+
         // Resolved by class //
         $definitions = Definitions::create()
             ->set(PDO::class, fn(): \PDO => new PDO('sqlite::memory:'))

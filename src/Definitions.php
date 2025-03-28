@@ -323,6 +323,18 @@ class Definitions
     }
 
     /**
+     * Define how to map constructors arguments when building objects of a given class
+     *
+     * @param class-string $class The class of the argument to resolve
+     * @param callable $value fn(string $name, string $class)
+     * @return self
+     */
+    public function resolveAll(string $class, callable $value): self
+    {
+        return $this->resolve($class, '*', $value);
+    }
+
+    /**
      * @param class-string $class
      * @return array<string,callable|string>
      */

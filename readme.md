@@ -13,7 +13,7 @@ Kaly DI is a lightweight and flexible dependency injection (DI) container design
 * **No Magic, No Attributes:**  Kaly DI intentionally avoids reliance on annotations or attributes. This prevents tight coupling between your code and the DI container, promoting a cleaner architecture and greater flexibility, in line with PSR-11 principles.
 * **PHP-Based Definitions:** Define your dependencies exclusively in PHP code using a powerful `Definitions` object. This enables strong type checking, autocompletion, and refactoring support from your IDE.
 * **Auto-wiring:** Your dependencies are injected automatically based on their types. Auto-wiring can be fine tuned using `resolvers`.
-* **Invariable Results:**  Calling `->get()` with the same identifier will consistently return the same object instance, providing predictable behavior and efficient resource management. If you need a new instance, simply clone the container to get a fresh container without cached instances.
+* **Invariable Results:**  Calling `->get()` with the same identifier will consistently return the same object instance, providing predictable behavior and efficient resource management. If you need a new instance (bypassing the cache), you can define a factory closure in your definitions or, alternatively, clone the container to get a completely fresh state.
 * **Powerful Injector:** The built-in injector allows you to dynamically call methods, automatically injecting dependencies from the container or through provided arguments. This facilitates seamless integration and flexible code execution.
 * **Focus on Performance:** The implementation is very light and is designed to be very fast.
 * **Clear Error Reporting:** Provides helpful error messages to simplify debugging issues.
@@ -60,7 +60,7 @@ Using the name of the class allows the container to use it to resolve types.
 
 The value is typically a class-string or a Closure, but you can register actual object instances.
 
-Services can also be set conditionnaly (see `setDefault` or `miss` methods).
+Services can also be set conditionally (see `setDefault` or `miss` methods).
 
 ### Binding interfaces
 
@@ -94,11 +94,11 @@ These callbacks can be set by:
 - Parent class
 - Service name
 
-If we have multiple callbacks (eg: for the interface and its class) they are all applied in a sensible order.
+If multiple callbacks apply to an object (e.g., one for an interface it implements and another for its concrete class), they are all executed in a deterministic order (e.g., interface callbacks before class callbacks).
 
 ### Resolve complex parameters
 
-You can define "resolvers" which can determine how a given class is resolved. There are three main cases:
+You can define "resolvers" which can determine how a given parameter class is resolved. There are three main cases:
 
 ```php
 // Case 1 : when resolving pdo classes, if the name is backupDb, using backupDb id
@@ -111,7 +111,7 @@ You can define "resolvers" which can determine how a given class is resolved. Th
     ...->resolve(PDO::class, TestObjectTwoPdosInterface::class, function (string $name, string $class) {...}
 ```
 
-Resolvers can only resolve named types
+Resolvers primarily target named types. Intersection types usually represent specific combinations that are best provided explicitly via parameters or dedicated factory definitions.
 
 ### Merging definitions
 
@@ -160,8 +160,10 @@ $inst = $injector->makeArray(MyClass::class, ['v' => 'test', 'v2' => 'test2']);
 ```
 
 You can provide a Container to the Injector build classes from interfaces or provided missing arguments.
-Make always provide a fresh object, even when building with a Container. Only its missing arguments are
-cached from container. If you need cached instances, don't use the Injector, use the Container directly.
+
+Note: make always returns a new instance, even when using a container. 
+It uses the container only to resolve missing constructor arguments that weren't provided directly. 
+If you need the container's potentially cached instance (if one exists for that ID), use `$container->get()` instead.
 
 ```php
 $injector = new Injector($container);

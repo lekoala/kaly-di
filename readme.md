@@ -72,8 +72,17 @@ that interface from the container, you will get the proper object.
 You can use the `parameter`, `parameters` and `parametersArray` methods to set parameters
 for a given service.
 
-Keep in mind that the parameter cannot reference another entry in the future container. If you need
-to do that, use resolvers (see below).
+In order to reference a given id from the container, use the `containerParameter` method or wrap
+the id in the `ServiceName` class.
+
+```php
+  $di = new Container(Definitions::create()
+            // Will resolve parameter 'v' with TestObject6. It could also be any custom id from the container.
+            ->containerParameter(TestZIntersectionClass::class, 'v', TestObject6::class)
+            ...
+```
+
+For more advanced way to deal with parameters, use resolvers (see below).
 
 ### Adding callbacks
 

@@ -79,9 +79,7 @@ class ContainerTest extends TestCase
         $this->assertNotSame($firstInterface, $altInterface);
         // They have the same class (TestObject6)
         $this->assertEquals($firstInterface, $altInterface);
-        // Intersection is resolved using the first of the interface
-        // $this->assertNotSame($firstInterface, $inst->v);
-        // $this->assertSame($altInterface, $inst->v);
+        // Intersection is resolved using TestObject6 entry which is a different id than the interfaces
         $this->assertNotSame($firstInterface, $inst->v);
         $this->assertNotSame($altInterface, $inst->v);
     }

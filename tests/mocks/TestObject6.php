@@ -2,6 +2,9 @@
 
 namespace Kaly\Tests\Mocks;
 
+/**
+ * This object implements two interfaces and can be consumed by TestZIntersectionClass
+ */
 class TestObject6 implements TestAltInterface, TestInterface
 {
     public string $v;

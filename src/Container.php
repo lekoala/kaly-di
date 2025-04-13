@@ -10,7 +10,6 @@ use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Psr\Container\ContainerExceptionInterface;
 use Exception;
-use ReflectionIntersectionType;
 
 /**
  * A simple yet powerful container that implements strictly the container interface
@@ -97,9 +96,13 @@ class Container implements ContainerInterface
             $constructorParameters = $constructor ? $constructor->getParameters() : [];
 
             $definedParameters = $definitions->allParametersFor($class, $id);
+            foreach ($definedParameters as $paramName => $paramValue) {
+                if ($paramValue instanceof ServiceName) {
+                    $definedParameters[$paramName] = $this->get($paramValue->name);
+                }
+            }
 
-            // Don't resolve object parameters using the container in favor of a custom strategy that allows resolvers
-            $arguments = Refl::resolveParameters($constructorParameters, $definedParameters);
+            $arguments = [];
             foreach ($constructorParameters as $parameter) {
                 // Get parameters from the definitions if set
                 $name = $parameter->getName();
@@ -112,13 +115,16 @@ class Container implements ContainerInterface
 
                 // Fetch from container based on argument type
                 $paramType = $parameter->getType();
-                $types = Refl::getParameterTypes($parameter);
+                $types = Parameters::getParameterTypes($parameter);
                 foreach ($types as $type) {
                     if ($type instanceof ReflectionNamedType) {
                         // Built in values will be provided by injector if needed
                         // For union types, these built in types get overwritten if there is a specific resolved type in the container
                         // A built-in type is any type that is not a class, interface, or trait.
                         if ($type->isBuiltin()) {
+                            if (!array_key_exists($name, $arguments)) {
+                                $arguments[$name] = Parameters::typeDefaultValue($type);
+                            }
                             continue;
                         }
 
@@ -132,7 +138,7 @@ class Container implements ContainerInterface
                         // Find definition where id matches the name of the parameter
                         if ($serviceName && $definitions->has($serviceName)) {
                             $argument = $this->get($serviceName);
-                            assert(Refl::valueMatchType($argument, $paramType));
+                            assert(Parameters::valueMatchType($argument, $paramType));
                             $arguments[$name] = $argument;
                             continue;
                         }
@@ -140,44 +146,18 @@ class Container implements ContainerInterface
                         // Or get based on type
                         if ($this->has($typeName)) {
                             $argument = $this->get($typeName);
-                            assert(Refl::valueMatchType($argument, $paramType));
+                            assert(Parameters::valueMatchType($argument, $paramType));
                             $arguments[$name] = $argument;
                             continue;
                         }
                     }
-                    if ($type instanceof ReflectionIntersectionType) {
-                        $intersectionTypes = $type->getTypes();
-                        $currentlyResolved = null;
-                        // If all the types resolve to the same object, we can use it
-                        foreach ($intersectionTypes as $intersectionType) {
-                            if ($intersectionType instanceof ReflectionNamedType) {
-                                if ($intersectionType->isBuiltin()) {
-                                    continue;
-                                }
-                                $intersectionTypeName = $intersectionType->getName();
-                                if ($this->has($intersectionTypeName)) {
-                                    $intersectionArgument = $this->get($intersectionTypeName);
-                                    // Since we cache by id, instances are not the same
-                                    if ($currentlyResolved && $currentlyResolved::class !== $intersectionArgument::class) {
-                                        $currentlyResolved = null;
-                                        break;
-                                    }
-                                    $currentlyResolved = $intersectionArgument;
-                                }
-                            }
-                        }
-                        if ($currentlyResolved) {
-                            $arguments[$name] = $currentlyResolved;
-                        }
-                    }
                 }
 
-                // It was resolved by injector (eg: a built in type)
+                // It was resolved
                 if (array_key_exists($name, $arguments)) {
                     continue;
                 }
-
-                // It's optional, we can continue
+                // It's optional
                 if ($parameter->isOptional()) {
                     continue;
                 }
@@ -264,21 +244,27 @@ class Container implements ContainerInterface
     protected function configure(object $instance, string $id): void
     {
         $definitions = $this->definitions;
-        $isInterface = interface_exists($id, false);
-        $isClass = class_exists($id, false);
         $instanceClass = $instance::class;
-        $callbacks = $isClass ? $definitions->callbacksForClass($id) : $definitions->callbacksFor($id);
-        // If $id is an interface or a named service, we may also have class calls
-        if ($instanceClass !== $id) {
-            $instanceCallbacks = $definitions->callbacksFor($instanceClass);
-            if ($isInterface) {
-                // interfaces callbacks are executed first and named callbacks are executed last
-                $callbacks = array_merge($callbacks, $instanceCallbacks);
-            } else {
-                // base class callbacks are executed first and service callbacks are executed last
-                $callbacks = array_merge($instanceCallbacks, $callbacks);
-            }
+
+        // Get callbacks defined specifically for the instance's concrete class
+        $instanceCallbacks = $definitions->callbacksForClass($instanceClass); // Includes parents
+
+        // Get callbacks defined for the requested ID (which might be the class itself, an interface, or a service name)
+        $idCallbacks = array_values($definitions->callbacksFor($id));
+
+        $callbacks = [];
+        if ($instanceClass === $id) {
+            // If ID is the concrete class, instanceCallbacks already contains everything needed.
+            $callbacks = $instanceCallbacks;
+        } elseif (interface_exists($id, false)) {
+            // For interfaces: Interface callbacks run first, then concrete class callbacks.
+            $callbacks = array_merge($idCallbacks, $instanceCallbacks);
+        } else {
+            // For named services (or potentially abstract classes used as IDs):
+            // Concrete class callbacks run first, then specific service ID callbacks.
+            $callbacks = array_merge($instanceCallbacks, $idCallbacks);
         }
+
         foreach ($callbacks as $closure) {
             $closure($instance, $this);
         }

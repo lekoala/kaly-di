@@ -58,13 +58,15 @@ class ContainerTest extends TestCase
     }
 
     /**
-     * When resolving an intersection class, its recommended to use parameters
-     * but if possible, we try to provide a matching class from the container
+     * When resolving an intersection class, you need to use parameters
      */
     public function testItCanCreateIntersectionObject(): void
     {
         $di = new Container(Definitions::create()
             ->bindAll(TestObject6::class)
+            ->containerParameter(TestZIntersectionClass::class, 'v', TestObject6::class)
+            // Same as
+            // ->parameter(TestZIntersectionClass::class, 'v', new ServiceName(TestObject6::class))
             ->lock());
         $inst = $di->get(TestZIntersectionClass::class);
         $this->assertInstanceOf(TestZIntersectionClass::class, $inst);
@@ -78,8 +80,10 @@ class ContainerTest extends TestCase
         // They have the same class (TestObject6)
         $this->assertEquals($firstInterface, $altInterface);
         // Intersection is resolved using the first of the interface
+        // $this->assertNotSame($firstInterface, $inst->v);
+        // $this->assertSame($altInterface, $inst->v);
         $this->assertNotSame($firstInterface, $inst->v);
-        $this->assertSame($altInterface, $inst->v);
+        $this->assertNotSame($altInterface, $inst->v);
     }
 
     /**

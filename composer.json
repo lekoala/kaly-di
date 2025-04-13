@@ -8,7 +8,7 @@
             "email": "thomas@lekoala.be"
         }
     ],
-    "version": "0.1",
+    "version": "0.2.0",
     "require": {
         "php": "^8.2",
         "psr/container": "^1.1.2|^2.0.2"

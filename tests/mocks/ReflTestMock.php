@@ -44,7 +44,8 @@ class ReflTestMock
         bool $c,
         int $d,
         float $e,
-        ReflTestMock $other
+        ReflTestMock $other,
+        iterable $i
     ) {
         // empty
     }

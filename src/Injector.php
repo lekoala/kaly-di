@@ -43,7 +43,7 @@ class Injector
         $reflection = new ReflectionFunction($closure);
         $parameters = $reflection->getParameters();
 
-        $resolvedParameters = Refl::resolveParameters($parameters, $arguments, $this->container);
+        $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
 
         $result = $reflection->invoke(...$resolvedParameters);
 
@@ -75,16 +75,16 @@ class Injector
     {
         $reflection = new ReflectionClass($class);
 
-        // If we try to instiante an interface, use the container if available
+        // If we try to instiante an interface, we need the container to map it to an actual
         if ($reflection->isInterface()) {
-            if ($this->container) {
-                // Get a fresh object
-                $clone = clone $this->container;
-                $inst = $clone->get($class);
-                assert($inst instanceof $class);
-                return $inst;
+            if (!$this->container) {
+                throw new InvalidArgumentException("Cannot instantiate an interface without a container");
             }
-            throw new InvalidArgumentException("Cannot instantiate an interface without a container");
+            // Get a fresh object
+            $clone = clone $this->container;
+            $inst = $clone->get($class);
+            assert($inst instanceof $class);
+            return $inst;
         }
 
         $constructor = $reflection->getConstructor();
@@ -92,7 +92,7 @@ class Injector
         // Collect constructor's arguments. There might be no constructor
         $parameters = $constructor ? $constructor->getParameters() : [];
 
-        $resolvedParameters = Refl::resolveParameters($parameters, $arguments, $this->container);
+        $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
 
         $instance = $reflection->newInstanceArgs($resolvedParameters);
 

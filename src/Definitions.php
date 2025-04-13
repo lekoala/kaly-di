@@ -213,6 +213,7 @@ class Definitions
     {
         assert(!$this->locked);
         assert(is_null($value) || is_object($value) || class_exists($value), "Value for `$id` is not valid");
+        // Avoid resolving stdClass with the DI container
         assert($id !== stdClass::class, "Cannot set stdClass as id");
         $this->values[$id] = $value;
         return $this;
@@ -279,7 +280,7 @@ class Definitions
         assert(!$this->locked);
         assert(class_exists($class), "Class `$class` does not exist");
 
-        // If no interface is provide, bind to first interface
+        // If no interface is provided, binds to a single interface
         if ($interface === null) {
             $interfaces = class_implements($class);
             assert(count($interfaces) === 1, "Class `$class` implements multiple interfaces");
@@ -357,18 +358,21 @@ class Definitions
         $resolvers = $this->resolversFor($typeName);
         if (!empty($resolvers)) {
             foreach ($resolvers as $key => $value) {
-                // Resolve all parameters using the closure
+                // Check for wildcard resolver. Applies a closure to *all* parameters of this type ($typeName)
                 if ($key === '*' && $value instanceof Closure) {
                     $serviceName = $value($name, $class);
                     break;
                 }
-                // Resolve a single parameter by name using the closure or set the service id
+                // Check for specific parameter name resolver. Applies to '$name' when type is $typeName
                 if ($key === $name) {
+                    // Value can be a specific service ID (string) or a closure to determine the ID
                     $serviceName = $value instanceof Closure ? $value($name, $class) : $value;
                     break;
                 }
-                // Resolve by class/interface using the closure or set the service id
+                // Check for class/interface target resolver: Applies if the *consuming* class ($class)
+                // matches or implements the resolver key ($key), for parameters of type $typeName.
                 if (str_contains((string) $key, '\\') && is_a($class, $key, true)) {
+                    // Value can be a specific service ID (string) or a closure to determine the ID
                     $serviceName = $value instanceof Closure ? $value($name, $class) : $value;
                     break;
                 }
@@ -383,7 +387,7 @@ class Definitions
      *
      * @param string $id
      * @param string $name
-     * @param mixed $value The actual value of the parameter. Cannot be a service id string, see resolvers.
+     * @param mixed $value The actual value of the parameter. To specify a service name, pass a ServiceName class.
      * @return self
      */
     public function parameter(string $id, string $name, mixed $value): self
@@ -391,6 +395,19 @@ class Definitions
         assert(!$this->locked);
         $this->parameters[$id][$name] = $value;
         return $this;
+    }
+
+    /**
+     * This is just a wrapper to specifc a ServiceName from the container
+     *
+     * @param string $id
+     * @param string $name
+     * @param string $serviceName
+     * @return self
+     */
+    public function containerParameter(string $id, string $name, string $serviceName): self
+    {
+        return $this->parameter($id, $name, new ServiceName($serviceName));
     }
 
     /**

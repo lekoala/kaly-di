@@ -111,6 +111,8 @@ You can define "resolvers" which can determine how a given class is resolved. Th
     ...->resolve(PDO::class, TestObjectTwoPdosInterface::class, function (string $name, string $class) {...}
 ```
 
+Resolvers can only resolve named types
+
 ### Merging definitions
 
 You can also merge definitions together. This can be useful when collecting definitions from a

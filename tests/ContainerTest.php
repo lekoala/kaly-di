@@ -84,6 +84,15 @@ class ContainerTest extends TestCase
         $this->assertNotSame($altInterface, $inst->v);
     }
 
+    public function testItFailsToCreateIntersectionObjectWithoutParameter(): void
+    {
+        $di = new Container(Definitions::create()
+            ->bindAll(TestObject6::class)
+            ->lock());
+        $this->expectException(UnresolvableParameterException::class);
+        $di->get(TestZIntersectionClass::class);
+    }
+
     /**
      * stdClass are a bit special, they are not built in and the container
      * should return a simple stdClass each time

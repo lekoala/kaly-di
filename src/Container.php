@@ -10,6 +10,7 @@ use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Psr\Container\ContainerExceptionInterface;
 use Exception;
+use ReflectionIntersectionType;
 
 /**
  * A simple yet powerful container that implements strictly the container interface

@@ -12,6 +12,8 @@ use Closure;
  * Resolvers define how the container selects a service when there are multiple candidates
  * for a given constructor parameter type. They support matching by parameter name,
  * by the consuming class, or via a wildcard closure.
+ * 
+ * @internal
  */
 final class ResolverRegistry
 {
@@ -68,7 +70,7 @@ final class ResolverRegistry
             return null;
         }
 
-        // 1. Precedence: Exact parameter name match
+        // Exact parameter name match
         if (array_key_exists($name, $resolvers)) {
             $value = $resolvers[$name];
             $serviceName = $value instanceof Closure ? $value($name, $class) : $value;
@@ -76,7 +78,7 @@ final class ResolverRegistry
             return $serviceName;
         }
 
-        // 2. Precedence: Class/Interface Context match
+        // Class/Interface Context match
         foreach ($resolvers as $key => $value) {
             if ($key === '*' || $key === $name) {
                 continue;
@@ -89,7 +91,7 @@ final class ResolverRegistry
             }
         }
 
-        // 3. Precedence: Wildcard fallback
+        // Wildcard fallback
         if (array_key_exists('*', $resolvers)) {
             $value = $resolvers['*'];
             if ($value instanceof Closure) {

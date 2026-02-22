@@ -44,8 +44,9 @@ final class Injector
         $parameters = $reflection->getParameters();
 
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
+        $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
 
-        $result = $reflection->invoke(...$resolvedParameters);
+        $result = $reflection->invoke(...$flatArguments);
 
         return $result;
     }
@@ -80,8 +81,9 @@ final class Injector
         $parameters = $constructor ? $constructor->getParameters() : [];
 
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
+        $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
 
-        $instance = $reflection->newInstanceArgs($resolvedParameters);
+        $instance = $reflection->newInstanceArgs($flatArguments);
 
         return $instance;
     }

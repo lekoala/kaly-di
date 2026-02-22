@@ -8,7 +8,7 @@ The library is composed of five main classes:
 
 1. **`Container`**: The primary entry point. Implements `Psr\Container\ContainerInterface`. It manages shared object instances and orchestrates the building process.
 2. **`Definitions`**: A fluent builder for container configuration. It stores service mappings, parameters, and callbacks.
-3. **`ResolverRegistry`**: Internal component (now extracted from Definitions) that manages complex auto-wiring rules.
+3. **`ResolverRegistry`**: Internal component that manages complex auto-wiring rules.
 4. **`Parameters`**: A static helper using Reflection to analyze constructor signatures and match types with container entries.
 5. **`Injector`**: A utility for "on-demand" instantiation and invocation.
 6. **`ServiceName`** *(internal)*: A DTO used by `containerParameter()` to reference container entries.

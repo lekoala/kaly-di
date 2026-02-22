@@ -187,6 +187,7 @@ final class Definitions
 
     /**
      * Add an entry
+     *
      * @param string $id
      * @param class-string|object|null $value
      * @return self

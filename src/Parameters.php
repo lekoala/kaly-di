@@ -101,14 +101,19 @@ final class Parameters
     }
 
     /**
-     * Given an array of ReflectionParameters, returns resolved parameters
-     * @param ReflectionParameter[] $parameters
+     * @param \ReflectionParameter[] $parameters
      * @param array<mixed> $arguments
-     * @param ?ContainerInterface $container If provided, 'ReflectionNamedType' will be looked for by id in the container
-     * @return array<string|mixed>|array<mixed>
+     * @param ContainerInterface|null $container
+     * @param bool $throwOnMissing Whether to throw UnresolvableParameterException if a parameter cannot be resolved
+     * @return array<mixed>
+     * @throws UnresolvableParameterException
      */
-    public static function resolveParameters(array $parameters, array $arguments, ?ContainerInterface $container = null): array
-    {
+    public static function resolveParameters(
+        array $parameters,
+        array $arguments,
+        ?ContainerInterface $container = null,
+        bool $throwOnMissing = false
+    ): array {
         // If we have an int indexed array, arguments are positional
         // Use named keys if no arguments are provided
         $isPositional = count($arguments) === 0 ? false : array_is_list($arguments);
@@ -174,6 +179,9 @@ final class Parameters
                     $resolvedArgument = self::resolveSingleParameter($parameter, $container);
                     $resolvedArguments[$argumentKey] = $resolvedArgument;
                 } catch (UnresolvableParameterException $e) {
+                    if ($throwOnMissing) {
+                        throw $e;
+                    }
                     // Simply ignore, this will trigger an ArgumentCount error
                 }
             }
@@ -214,7 +222,10 @@ final class Parameters
                 $parameter->getPosition(),
                 $parameter->getName(),
                 self::reflectionTypeToString($parameter->getType())
-            )
+            ),
+            0,
+            null,
+            $parameter->getName()
         );
     }
 
@@ -222,5 +233,33 @@ final class Parameters
     {
         // Reflection types have __toString magic method which is usually sufficient
         return $type === null ? 'mixed' : (string) $type;
+    }
+
+    /**
+     * Flattens resolved associative arguments into a purely positional array,
+     * natively unpacking variadic arrays for PHP 8+ Reflection calls.
+     *
+     * @param \ReflectionParameter[] $parameters
+     * @param array<mixed> $resolvedArguments
+     * @return array<mixed>
+     */
+    public static function flattenArguments(array $parameters, array $resolvedArguments): array
+    {
+        $flat = [];
+        foreach ($parameters as $parameter) {
+            $name = $parameter->getName();
+            if (array_key_exists($name, $resolvedArguments)) {
+                if ($parameter->isVariadic() && is_array($resolvedArguments[$name])) {
+                    foreach ($resolvedArguments[$name] as $v) {
+                        $flat[] = $v;
+                    }
+                } else {
+                    $flat[] = $resolvedArguments[$name];
+                }
+            } elseif (array_key_exists($parameter->getPosition(), $resolvedArguments)) {
+                $flat[] = $resolvedArguments[$parameter->getPosition()];
+            }
+        }
+        return $flat;
     }
 }

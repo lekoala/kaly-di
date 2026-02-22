@@ -94,8 +94,9 @@ class Container implements ContainerInterface
 
             // Wrap any exception in a ContainerException
             try {
+                $flatArguments = Parameters::flattenArguments($constructorParameters, $arguments);
                 /** @var object $instance */
-                $instance = $reflection->newInstanceArgs($arguments);
+                $instance = $reflection->newInstanceArgs($flatArguments);
             } catch (Exception $e) {
                 $type = $e::class;
                 throw new ContainerException("Unable to create object `$id`, threw exception: `{$type}` with message `{$e->getMessage()}`");
@@ -120,70 +121,52 @@ class Container implements ContainerInterface
     {
         $definitions = $this->definitions;
 
+        // 1. Gather explicitly defined parameters for this class/id
         $definedParameters = $definitions->allParametersFor($class, $id);
+        $arguments = [];
         foreach ($definedParameters as $paramName => $paramValue) {
             if ($paramValue instanceof ServiceName) {
-                $definedParameters[$paramName] = $this->get($paramValue->name);
+                $arguments[$paramName] = $this->get($paramValue->name);
+            } else {
+                $arguments[$paramName] = $paramValue;
             }
         }
 
-        $arguments = [];
+        // 2. Check Resolvers for any missing arguments that map to services
         foreach ($constructorParameters as $parameter) {
             $name = $parameter->getName();
 
-            // It is provided by definitions (and not null), skip
-            if (isset($definedParameters[$name])) {
-                $arguments[$name] = $definedParameters[$name];
-                continue;
-            }
-
-            // Fetch from container based on argument type
-            $paramType = $parameter->getType();
-            $types = Parameters::getParameterTypes($parameter);
-            foreach ($types as $type) {
-                if ($type instanceof ReflectionNamedType) {
-                    // Built-in types (string, int, etc.) cannot be resolved from the container
-                    if ($type->isBuiltin()) {
-                        continue;
-                    }
-
-                    $typeName = $type->getName();
-                    assert(class_exists($typeName) || interface_exists($typeName));
-
-                    // Check if we have any custom resolver that maps this variable to a registered service
-                    $serviceName = $definitions->resolveName($name, $typeName, $class);
-
-                    // Find definition where id matches the name of the parameter
-                    if ($serviceName && $definitions->has($serviceName)) {
-                        $argument = $this->get($serviceName);
-                        assert(Parameters::valueMatchType($argument, $paramType));
-                        $arguments[$name] = $argument;
-                        continue;
-                    }
-
-                    // Or get based on type
-                    if ($this->has($typeName)) {
-                        $argument = $this->get($typeName);
-                        assert(Parameters::valueMatchType($argument, $paramType));
-                        $arguments[$name] = $argument;
-                        continue;
-                    }
-                }
-            }
-
-            // It was resolved
             if (array_key_exists($name, $arguments)) {
                 continue;
             }
-            // It's optional
-            if ($parameter->isOptional()) {
-                continue;
-            }
 
-            throw new UnresolvableParameterException("Unable to create object `$id`, missing parameter: `$name`");
+            $types = Parameters::getParameterTypes($parameter);
+            foreach ($types as $type) {
+                if ($type instanceof \ReflectionNamedType && !$type->isBuiltin()) {
+                    $typeName = $type->getName();
+                    assert(class_exists($typeName) || interface_exists($typeName));
+                    /** @var class-string $typeName */
+                    $serviceName = $definitions->resolveName($name, $typeName, $class);
+
+                    if ($serviceName && $definitions->has($serviceName)) {
+                        $arguments[$name] = $this->get($serviceName);
+                        break;
+                    }
+                }
+            }
         }
 
-        return $arguments;
+        // 3. Delegate final resolution (type-checks, defaults, nullability, auto-wiring) to Parameters
+        try {
+            /** @var array<string,mixed> $resolved */
+            $resolved = Parameters::resolveParameters($constructorParameters, $arguments, $this, true);
+            return $resolved;
+        } catch (UnresolvableParameterException $e) {
+            // Rethrow with the exact Container error formatting
+            throw new UnresolvableParameterException(
+                "Unable to create object `$id`, missing parameter: `{$e->getParameterName()}`"
+            );
+        }
     }
 
     /**

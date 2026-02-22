@@ -22,6 +22,8 @@ use Kaly\Di\ReferenceNotFoundException;
 use Kaly\Di\ContainerException;
 use Kaly\Di\UnresolvableParameterException;
 use Kaly\Tests\Mocks\TestAltInterface;
+use Kaly\Tests\Mocks\TestNullableArg;
+use Kaly\Tests\Mocks\TestVariadicArg;
 use stdClass;
 use Kaly\Tests\Mocks\TestExceptionConstructorObject;
 use Kaly\Tests\Mocks\TestObject3;
@@ -92,6 +94,31 @@ class ContainerTest extends TestCase
             ->lock());
         $this->expectException(UnresolvableParameterException::class);
         $di->get(TestZIntersectionClass::class);
+    }
+
+    public function testItCanCreateNullableObject(): void
+    {
+        $di = new Container();
+        $inst = $di->get(TestNullableArg::class);
+
+        $this->assertInstanceOf(TestNullableArg::class, $inst);
+        $this->assertNull($inst->test);
+    }
+
+    public function testItCanCreateObjectWithVariadicConstructor(): void
+    {
+        // Without definitions, variadic arguments are simply empty
+        $di = new Container();
+        $inst = $di->get(TestVariadicArg::class);
+        $this->assertInstanceOf(TestVariadicArg::class, $inst);
+        $this->assertEquals([], $inst->names);
+
+        // With definitions, the array is provided to the variadic parameter
+        $diWithParams = new Container(Definitions::create()
+            ->parameter(TestVariadicArg::class, 'names', ['a', 'b'])
+            ->lock());
+        $instWithParams = $diWithParams->get(TestVariadicArg::class);
+        $this->assertEquals(['a', 'b'], $instWithParams->names);
     }
 
     /**

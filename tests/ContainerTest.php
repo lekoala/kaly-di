@@ -121,6 +121,17 @@ class ContainerTest extends TestCase
         $this->assertEquals(['a', 'b'], $instWithParams->names);
     }
 
+    public function testItThrowsWhenPassingNonArrayToNamedVariadicContainer(): void
+    {
+        $di = new Container(Definitions::create()
+            ->parameter(TestVariadicArg::class, 'names', 'not-an-array')
+            ->lock());
+
+        $this->expectException(ContainerException::class);
+        $this->expectExceptionMessageMatches('/must be an array when passed by name/');
+        $di->get(TestVariadicArg::class);
+    }
+
     /**
      * stdClass are a bit special, they are not built in and the container
      * should return a simple stdClass each time

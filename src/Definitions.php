@@ -238,11 +238,11 @@ final class Definitions
     public function register(object $obj): self
     {
         assert(!$this->locked);
-        $interfaces = class_implements($obj);
+        $interfaces = class_implements($obj) ?: [];
         foreach ($interfaces as $interface) {
             $this->setDefault($interface, $obj);
         }
-        $parents = class_parents($obj);
+        $parents = class_parents($obj) ?: [];
         foreach ($parents as $parent) {
             $this->setDefault($parent, $obj);
         }
@@ -258,18 +258,18 @@ final class Definitions
      * @param array<mixed> $parameters
      * @return self
      */
-    public function bind(string $class, ?string $interface = null, $parameters = []): self
+    public function bind(string $class, ?string $interface = null, array $parameters = []): self
     {
         assert(!$this->locked);
         assert(class_exists($class), "Class `$class` does not exist");
 
         // If no interface is provided, binds to a single interface
         if ($interface === null) {
-            $interfaces = class_implements($class);
+            $interfaces = class_implements($class) ?: [];
             assert(count($interfaces) === 1, "Class `$class` implements multiple interfaces");
-            $interface = key($interfaces);
+            $interface = (string)key($interfaces);
         }
-        assert($interface !== null && interface_exists($interface), "Interface `$interface` does not exist");
+        assert($interface !== '' && interface_exists($interface), "Interface `$interface` does not exist");
         if (!empty($parameters)) {
             $this->parameters($class, ...$parameters);
         }
@@ -284,7 +284,7 @@ final class Definitions
      */
     public function bindAll(string $class)
     {
-        $interfaces = class_implements($class);
+        $interfaces = class_implements($class) ?: [];
         foreach ($interfaces as $interface) {
             $this->setDefault($interface, $class);
         }
@@ -371,10 +371,8 @@ final class Definitions
     /**
      * Provide a list of parameters for an entry
      * Used with named params, eg: parameters(Xyz::class, param1: 'somevalue', param2: 'someotherval')
-     *
-     * @param array<mixed> ...$params
      */
-    public function parameters(string $id, ...$params): self
+    public function parameters(string $id, mixed ...$params): self
     {
         assert(!$this->locked);
         foreach ($params as $k => $v) {
@@ -445,12 +443,12 @@ final class Definitions
      * Retrieve callbacks for a class and all its ancestors
      *
      * @param class-string $class
-     * @return list<callable(): mixed>
+     * @return list<callable>
      */
     public function callbacksForClass(string $class): array
     {
         assert(class_exists($class));
-        $parents = class_parents($class);
+        $parents = class_parents($class) ?: [];
         $callbacks = [];
         // Use array_values to avoid callbacks being overwritten since they could share the same index
         foreach ($parents as $parent) {

@@ -12,7 +12,7 @@ use Closure;
  * Resolvers define how the container selects a service when there are multiple candidates
  * for a given constructor parameter type. They support matching by parameter name,
  * by the consuming class, or via a wildcard closure.
- * 
+ *
  * @internal
  */
 final class ResolverRegistry
@@ -84,7 +84,7 @@ final class ResolverRegistry
                 continue;
             }
 
-            if ((class_exists((string) $key) || interface_exists((string) $key)) && is_a($class, (string) $key, true)) {
+            if ((class_exists($key) || interface_exists($key)) && is_a($class, $key, true)) {
                 $serviceName = $value instanceof Closure ? $value($name, $class) : $value;
                 assert(is_string($serviceName));
                 return $serviceName;

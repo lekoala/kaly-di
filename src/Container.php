@@ -166,6 +166,11 @@ class Container implements ContainerInterface
             throw new UnresolvableParameterException(
                 "Unable to create object `$id`, missing parameter: `{$e->getParameterName()}`"
             );
+        } catch (\InvalidArgumentException $e) {
+            $type = $e::class;
+            throw new ContainerException(
+                "Unable to create object `$id`, threw exception: `{$type}` with message `{$e->getMessage()}`"
+            );
         }
     }
 

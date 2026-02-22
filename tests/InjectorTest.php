@@ -152,4 +152,12 @@ class InjectorTest extends TestCase
         $this->assertEquals('test2', $inst2->v2);
         $this->assertEquals(['b'], $inst2->arr);
     }
+
+    public function testMakeThrowsWhenPassingNonArrayToNamedVariadicInjector(): void
+    {
+        $injector = new Injector();
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/must be an array when passed by name/');
+        $injector->invoke(function (...$names) {}, names: 'not-an-array');
+    }
 }

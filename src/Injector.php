@@ -31,14 +31,12 @@ final class Injector
      * Invoke any callable and resolve classes using the di container
      * You can pass named arguments or positional arguments with ...$arguments
      *
-     * @param array<string,string>|string|callable $callable
+     * @param callable $callable
      * @param array<mixed> ...$arguments
      * @return mixed
      */
-    public function invoke(array|string|callable $callable, ...$arguments)
+    public function invoke(callable $callable, ...$arguments)
     {
-        // This is needed to support [$class, $method] syntax
-        assert(is_callable($callable));
         $closure = Closure::fromCallable($callable);
         $reflection = new ReflectionFunction($closure);
         $parameters = $reflection->getParameters();
@@ -71,8 +69,9 @@ final class Injector
             // Resolve to the concrete class via the container, then build a fresh instance
             $resolved = $this->container->get($class);
             assert(is_object($resolved));
-            // @phpstan-ignore return.type
-            return $this->make($resolved::class, ...$arguments);
+            /** @var T $instance */
+            $instance = $this->make($resolved::class, ...$arguments);
+            return $instance;
         }
 
         $constructor = $reflection->getConstructor();
@@ -83,6 +82,7 @@ final class Injector
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
         $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
 
+        /** @var T $instance */
         $instance = $reflection->newInstanceArgs($flatArguments);
 
         return $instance;

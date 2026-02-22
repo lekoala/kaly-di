@@ -7,7 +7,7 @@ namespace Kaly\Di;
 use Exception;
 use Psr\Container\ContainerExceptionInterface;
 
-class UnresolvableParameterException extends Exception implements ContainerExceptionInterface
+final class UnresolvableParameterException extends Exception implements ContainerExceptionInterface
 {
     // empty
 }

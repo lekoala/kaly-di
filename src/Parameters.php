@@ -29,10 +29,15 @@ final class Parameters
             return [];
         }
 
-        //@phpstan-ignore-next-line
-        return $reflectionType instanceof ReflectionUnionType
-            ? $reflectionType->getTypes()
-            : [$reflectionType];
+        if ($reflectionType instanceof ReflectionUnionType) {
+            return $reflectionType->getTypes();
+        }
+
+        if ($reflectionType instanceof ReflectionNamedType || $reflectionType instanceof ReflectionIntersectionType) {
+            return [$reflectionType];
+        }
+
+        return [];
     }
 
     /**
@@ -179,41 +184,28 @@ final class Parameters
 
     private static function resolveSingleParameter(ReflectionParameter $parameter, ?ContainerInterface $container): mixed
     {
-        $defaultValue = null;
-
-        // Or resolve using the container for any valid type
+        // Resolve using the container for any valid type
         $types = self::getParameterTypes($parameter);
         foreach ($types as $type) {
             if ($type instanceof ReflectionNamedType) {
-                // Check first for actual objects instead of built ins
                 if (!$type->isBuiltin()) {
                     // The container must use the class or interface name as id
                     $name = $type->getName();
                     if ($container && $container->has($name)) {
                         return $container->get($name);
                     }
-                } else {
-                    // If null is not allowed, update default value
-                    if ($defaultValue === null && !$parameter->allowsNull()) {
-                        $defaultValue = self::typeDefaultValue($type);
-                    }
                 }
             }
         }
 
-        // In priority, use code provided default
+        // Use code-provided default
         if ($parameter->isDefaultValueAvailable()) {
             return $parameter->getDefaultValue();
         }
 
         // It allows null
-        if ($parameter->allowsNull() && $defaultValue === null) {
+        if ($parameter->allowsNull()) {
             return null;
-        }
-
-        // It has a default value
-        if ($defaultValue !== null) {
-            return $defaultValue;
         }
 
         throw new UnresolvableParameterException(
@@ -230,29 +222,5 @@ final class Parameters
     {
         // Reflection types have __toString magic method which is usually sufficient
         return $type === null ? 'mixed' : (string) $type;
-    }
-
-    /**
-     * Creates a default value for built in types
-     * @param ReflectionNamedType|null $type
-     * @return mixed
-     */
-    public static function typeDefaultValue(?ReflectionNamedType $type): mixed
-    {
-        if (!$type || !$type->isBuiltin()) {
-            return null;
-        }
-
-        $name = $type->getName();
-
-        // Built in is : string, float, bool, int, iterable, mixed, array
-        return match ($name) {
-            'array', 'iterable' =>  [],
-            'string' => '',
-            'bool' => false,
-            'int' => 0,
-            'float' => 0.0,
-            default => null,
-        };
     }
 }

@@ -11,16 +11,16 @@ use ReflectionFunction;
 use ReflectionClass;
 
 /**
- * Call function or create classes with dynamic arguments
- * Can optionaly resolve arguments with a container
+ * Invoke callables or create fresh objects with automatic dependency resolution
  *
- * Links for inspiration
+ * Can optionally use a PSR-11 container to resolve missing arguments.
+ *
  * @link https://github.com/yiisoft/injector
  * @link https://github.com/PHP-DI/Invoker
  */
-class Injector
+final class Injector
 {
-    protected ?ContainerInterface $container = null;
+    protected readonly ?ContainerInterface $container;
 
     public function __construct(?ContainerInterface $container = null)
     {
@@ -38,7 +38,7 @@ class Injector
     public function invoke(array|string|callable $callable, ...$arguments)
     {
         // This is needed to support [$class, $method] syntax
-        //@phpstan-ignore-next-line
+        assert(is_callable($callable));
         $closure = Closure::fromCallable($callable);
         $reflection = new ReflectionFunction($closure);
         $parameters = $reflection->getParameters();
@@ -48,19 +48,6 @@ class Injector
         $result = $reflection->invoke(...$resolvedParameters);
 
         return $result;
-    }
-
-    /**
-     * Invoke any callable and resolve classes using the di container
-     * You can pass named arguments as an array
-     *
-     * @param callable $callable
-     * @param array<string,mixed> $arguments
-     * @return mixed
-     */
-    public function invokeArray(callable $callable, array $arguments)
-    {
-        return $this->invoke($callable, ...$arguments);
     }
 
     /**
@@ -75,16 +62,16 @@ class Injector
     {
         $reflection = new ReflectionClass($class);
 
-        // If we try to instiante an interface, we need the container to map it to an actual
+        // If we try to instantiate an interface, we need the container to map it to a class
         if ($reflection->isInterface()) {
             if (!$this->container) {
                 throw new InvalidArgumentException("Cannot instantiate an interface without a container");
             }
-            // Get a fresh object
-            $clone = clone $this->container;
-            $inst = $clone->get($class);
-            assert($inst instanceof $class);
-            return $inst;
+            // Resolve to the concrete class via the container, then build a fresh instance
+            $resolved = $this->container->get($class);
+            assert(is_object($resolved));
+            // @phpstan-ignore return.type
+            return $this->make($resolved::class, ...$arguments);
         }
 
         $constructor = $reflection->getConstructor();
@@ -97,18 +84,5 @@ class Injector
         $instance = $reflection->newInstanceArgs($resolvedParameters);
 
         return $instance;
-    }
-
-    /**
-     * Build a an object based on its class
-     *
-     * @template T of object
-     * @param class-string<T> $class
-     * @param array<string,mixed> $arguments
-     * @return T
-     */
-    public function makeArray(string $class, $arguments)
-    {
-        return $this->make($class, ...$arguments);
     }
 }

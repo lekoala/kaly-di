@@ -12,6 +12,7 @@ use Kaly\Tests\Mocks\TestObject5;
 use PHPUnit\Framework\TestCase;
 use Kaly\Tests\Mocks\TestObject2;
 use Kaly\Tests\Mocks\TestAltInterface;
+use Kaly\Tests\Mocks\TestApp;
 
 class DefinitionsTest extends TestCase
 {
@@ -28,11 +29,11 @@ class DefinitionsTest extends TestCase
         $this->assertTrue($def2 !== $def);
 
         $this->assertTrue($def->has(TestInterface::class));
-        $this->assertFalse($def->miss(TestInterface::class));
+        $this->assertFalse(!$def->has(TestInterface::class));
         $this->assertEquals(TestObject::class, $def->get(TestInterface::class));
 
         $obj = new TestObject5('v', 'v2', []);
-        $def->add($obj);
+        $def->register($obj);
         $this->assertTrue($def->has(TestAltInterface::class));
         $this->assertTrue($def->has(TestObject5::class));
 
@@ -78,7 +79,7 @@ class DefinitionsTest extends TestCase
         $this->assertTrue($def->has('key'));
         $this->assertEquals(TestObject::class, $def->get('key'));
         $this->assertNull($def->get('nonexistent'));
-        $this->assertTrue($def->miss('nonexistent'));
+        $this->assertTrue(!$def->has('nonexistent'));
 
         // Already sets, so does nothing
         $def->setDefault('key', TestObject2::class);
@@ -104,11 +105,11 @@ class DefinitionsTest extends TestCase
         $this->assertEquals(TestObject::class, $def->expand('value'));
     }
 
-    public function testAdd(): void
+    public function testRegister(): void
     {
         $def = Definitions::create();
         $obj = new TestObject5('v', 'v2', []);
-        $def->add($obj);
+        $def->register($obj);
 
         $this->assertTrue($def->has(TestObject5::class));
         $this->assertTrue($def->has(TestAltInterface::class));

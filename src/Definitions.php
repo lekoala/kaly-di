@@ -8,17 +8,16 @@ use Closure;
 use stdClass;
 
 /**
- * This class is used to build definitions for the DI Container
+ * Fluent builder for container configuration
  *
- * At its core, there is a map of id/class => class/object
+ * Maps identifiers (class names, interfaces, or custom strings) to class names,
+ * objects, or factory closures. Also manages parameters, callbacks, and resolvers.
  *
- * But it also allows defining parameters, callbacks after instantiation and custom
- * resolvers for specific classes or interfaces
+ * Validation checks (class_exists, lock state) use assert() for zero production overhead.
  *
- * class_exists check are only enabled during development as DX convenience
- * see https://github.com/capsulephp/di/issues/6 for reasoning
+ * @see https://github.com/capsulephp/di/issues/6
  */
-class Definitions
+final class Definitions
 {
     /**
      * Store definitions as a map
@@ -43,9 +42,8 @@ class Definitions
 
     /**
      * Resolve arguments based on custom conditions
-     * @var array<class-string,array<string,callable|string>>
      */
-    protected array $resolvers = [];
+    protected readonly ResolverRegistry $resolverRegistry;
 
     /**
      * Lock status
@@ -59,6 +57,7 @@ class Definitions
      */
     public function __construct(array|Definitions|null $definitions = null)
     {
+        $this->resolverRegistry = new ResolverRegistry();
         if ($definitions === null) {
             return;
         }
@@ -84,25 +83,19 @@ class Definitions
     {
         $this->values = array_merge($this->values, $definitions->getValues());
 
-        //@phpstan-ignore-next-line
-        $this->callbacks = $this->mergeDefinitionsData($this->callbacks, $definitions->getCallbacks());
-        //@phpstan-ignore-next-line
-        $this->parameters = $this->mergeDefinitionsData($this->parameters, $definitions->getParameters());
-        //@phpstan-ignore-next-line
-        $this->resolvers = $this->mergeDefinitionsData($this->resolvers, $definitions->getResolvers());
-    }
-
-    /**
-     * @param array<string,array<mixed>> $arr
-     * @param array<string,array<mixed>> $arr2
-     * @return array<string,array<mixed>>
-     */
-    public function mergeDefinitionsData(array $arr, array $arr2): array
-    {
-        foreach ($arr2 as $key => $values) {
-            $arr[$key] = array_merge($arr[$key] ?? [], $values);
+        foreach ($definitions->getCallbacks() as $key => $values) {
+            $this->callbacks[$key] = array_merge($this->callbacks[$key] ?? [], $values);
         }
-        return $arr;
+
+        foreach ($definitions->getParameters() as $key => $values) {
+            $this->parameters[$key] = array_merge($this->parameters[$key] ?? [], $values);
+        }
+
+        $resolvers = $this->resolverRegistry->getResolvers();
+        foreach ($definitions->getResolvers() as $key => $values) {
+            $resolvers[$key] = array_merge($resolvers[$key] ?? [], $values);
+        }
+        $this->resolverRegistry->setResolvers($resolvers);
     }
 
     /**
@@ -134,7 +127,7 @@ class Definitions
      */
     public function getResolvers(): array
     {
-        return $this->resolvers;
+        return $this->resolverRegistry->getResolvers();
     }
 
     public function createContainer(): Container
@@ -147,7 +140,7 @@ class Definitions
         ksort($this->values);
         ksort($this->callbacks);
         ksort($this->parameters);
-        ksort($this->resolvers);
+        $this->resolverRegistry->sort();
     }
 
     /**
@@ -162,17 +155,6 @@ class Definitions
         // isset() does not return true for array keys that correspond to a null value, while array_key_exists() does.
         // see https://www.php.net/manual/en/function.array-key-exists.php
         return array_key_exists($id, $this->values);
-    }
-
-    /**
-     * Check if entry does not exist
-     *
-     * @param string $id
-     * @return bool
-     */
-    public function miss(string $id): bool
-    {
-        return !$this->has($id);
     }
 
     /**
@@ -252,7 +234,7 @@ class Definitions
      * @param object $obj
      * @return self
      */
-    public function add(object $obj): self
+    public function register(object $obj): self
     {
         assert(!$this->locked);
         $interfaces = class_implements($obj);
@@ -288,7 +270,7 @@ class Definitions
         }
         assert($interface !== null && interface_exists($interface), "Interface `$interface` does not exist");
         if (!empty($parameters)) {
-            $this->parametersArray($class, $parameters);
+            $this->parameters($class, ...$parameters);
         }
         return $this->set($interface, $class);
     }
@@ -319,7 +301,7 @@ class Definitions
     public function resolve(string $class, string $key, callable|string $value): self
     {
         assert(!$this->locked);
-        $this->resolvers[$class][$key] = $value;
+        $this->resolverRegistry->resolve($class, $key, $value);
         return $this;
     }
 
@@ -341,7 +323,7 @@ class Definitions
      */
     public function resolversFor(string $class): array
     {
-        return $this->resolvers[$class] ?? [];
+        return $this->resolverRegistry->resolversFor($class);
     }
 
     /**
@@ -354,32 +336,7 @@ class Definitions
      */
     public function resolveName(string $name, string $typeName, string $class): ?string
     {
-        $serviceName = null;
-        $resolvers = $this->resolversFor($typeName);
-        if (!empty($resolvers)) {
-            foreach ($resolvers as $key => $value) {
-                // Check for wildcard resolver. Applies a closure to *all* parameters of this type ($typeName)
-                if ($key === '*' && $value instanceof Closure) {
-                    $serviceName = $value($name, $class);
-                    break;
-                }
-                // Check for specific parameter name resolver. Applies to '$name' when type is $typeName
-                if ($key === $name) {
-                    // Value can be a specific service ID (string) or a closure to determine the ID
-                    $serviceName = $value instanceof Closure ? $value($name, $class) : $value;
-                    break;
-                }
-                // Check for class/interface target resolver: Applies if the *consuming* class ($class)
-                // matches or implements the resolver key ($key), for parameters of type $typeName.
-                if (str_contains((string) $key, '\\') && is_a($class, $key, true)) {
-                    // Value can be a specific service ID (string) or a closure to determine the ID
-                    $serviceName = $value instanceof Closure ? $value($name, $class) : $value;
-                    break;
-                }
-            }
-        }
-        assert(is_null($serviceName) || is_string($serviceName));
-        return $serviceName;
+        return $this->resolverRegistry->resolveName($name, $typeName, $class);
     }
 
     /**
@@ -398,7 +355,7 @@ class Definitions
     }
 
     /**
-     * This is just a wrapper to specifc a ServiceName from the container
+     * This is just a wrapper to specify a ServiceName from the container
      *
      * @param string $id
      * @param string $name
@@ -424,18 +381,6 @@ class Definitions
             $this->parameter($id, (string)$k, $v);
         }
         return $this;
-    }
-
-
-    /**
-     * Provide a list of parameters for an entry
-     * Used with array, eg: parametersArray(Xyz::class, ['param1' => 'somevalue', 'param2' => 'someotherval'])
-     *
-     * @param array<mixed> $params
-     */
-    public function parametersArray(string $id, array $params): self
-    {
-        return $this->parameters($id, ...$params);
     }
 
     /**

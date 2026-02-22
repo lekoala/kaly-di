@@ -23,7 +23,8 @@ class ParametersTest extends TestCase
     {
         $reflection = new ReflectionClass(PDO::class);
         $parameters = Parameters::resolveParameters($reflection->getConstructor()->getParameters(), []);
-        $this->assertEquals(['dsn', 'username', 'password', 'options'], array_keys($parameters));
+        // dsn is a required string with no default, so it won't be resolved
+        $this->assertEquals(['username', 'password', 'options'], array_keys($parameters));
     }
 
     public function testGetParameterTypes(): void
@@ -190,11 +191,10 @@ class ParametersTest extends TestCase
         $method = $reflection->getMethod('methodWithManyParams');
         $parameters = $method->getParameters();
 
-        // Cannot mix named/positional in an array => here, param1 stays empty
+        // Cannot mix named/positional in an array => here, param1 is not passed
         $arguments = ['test', 'param2' => 123, 'param3' => true];
         $resolved = Parameters::resolveParameters($parameters, $arguments);
         $this->assertSame([
-            'param1' => '',
             'param2' => 123,
             'param3' => true,
             'param4' => [],
@@ -257,24 +257,10 @@ class ParametersTest extends TestCase
         $this->assertArrayHasKey('param1', $resolved);
         $this->assertInstanceOf(stdClass::class, $resolved['param1']);
         $this->assertArrayHasKey('param2', $resolved);
-        $this->assertEquals('', $resolved['param2']);
+        $this->assertNull($resolved['param2']);
     }
 
-    public function testtypeDefaultValue(): void
-    {
-        $reflector = new ReflectionClass(ReflTestMock::class);
-        $method = $reflector->getMethod('methodWithDefaultTypes');
-        $parameters = $method->getParameters();
-        // Test with different types
-        $this->assertSame([], Parameters::typeDefaultValue($parameters[0]->getType())); // array
-        $this->assertSame('', Parameters::typeDefaultValue($parameters[1]->getType())); // string
-        $this->assertSame(false, Parameters::typeDefaultValue($parameters[2]->getType())); // bool
-        $this->assertSame(0, Parameters::typeDefaultValue($parameters[3]->getType())); // int
-        $this->assertSame(0.0, Parameters::typeDefaultValue($parameters[4]->getType())); // float
-        $this->assertNull(Parameters::typeDefaultValue($parameters[5]->getType())); // other
-        $this->assertSame([], Parameters::typeDefaultValue($parameters[6]->getType())); // iterable
-        $this->assertNull(Parameters::typeDefaultValue(null)); // null
-    }
+
 
     /**
      * Tests resolving parameters when a variadic parameter is passed as a named argument (array).
@@ -302,7 +288,6 @@ class ParametersTest extends TestCase
         $expected = [
             'param1' => 'value1',
             'param2' => 101,
-            'param3' => false, // Default value
             'param4' => [],    // Default value
             'param5' => 0,     // Default value
             'param6' => false, // Default value

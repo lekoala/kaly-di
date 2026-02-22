@@ -10,26 +10,20 @@ use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 use Psr\Container\ContainerExceptionInterface;
 use Exception;
-use ReflectionIntersectionType;
 
 /**
- * A simple yet powerful container that implements strictly the container interface
+ * A PSR-11 compliant dependency injection container
  *
- * The only public methods are the ones from the interface
+ * Instances are resolved lazily and cached: calling get() with the same id
+ * always returns the same object. For fresh instances, use factory closures
+ * or the Injector.
  *
- * You can only initialize definitions with the constructor, after that the container is "locked"
- * You may still alter definitions if you have defined them beforehand
- *
- * All returned objects are cached. If you need fresh instances, return factories from the container
- * The creation logic is handled by the Injector
- *
- * Credits to for inspiration
  * @link https://github.com/devanych/di-container
  * @link https://github.com/capsulephp/di
  */
 class Container implements ContainerInterface
 {
-    protected Definitions $definitions;
+    protected readonly Definitions $definitions;
     /**
      * @var array<string,bool>
      */
@@ -96,76 +90,7 @@ class Container implements ContainerInterface
             // Collect constructor's arguments. There might be no constructor
             $constructorParameters = $constructor ? $constructor->getParameters() : [];
 
-            $definedParameters = $definitions->allParametersFor($class, $id);
-            foreach ($definedParameters as $paramName => $paramValue) {
-                if ($paramValue instanceof ServiceName) {
-                    $definedParameters[$paramName] = $this->get($paramValue->name);
-                }
-            }
-
-            $arguments = [];
-            foreach ($constructorParameters as $parameter) {
-                // Get parameters from the definitions if set
-                $name = $parameter->getName();
-
-                // It is provided by definitions (and not null), skip
-                if (isset($definedParameters[$name])) {
-                    $arguments[$name] = $definedParameters[$name];
-                    continue;
-                }
-
-                // Fetch from container based on argument type
-                $paramType = $parameter->getType();
-                $types = Parameters::getParameterTypes($parameter);
-                foreach ($types as $type) {
-                    if ($type instanceof ReflectionNamedType) {
-                        // Built in values will be provided by injector if needed
-                        // For union types, these built in types get overwritten if there is a specific resolved type in the container
-                        // A built-in type is any type that is not a class, interface, or trait.
-                        if ($type->isBuiltin()) {
-                            if (!array_key_exists($name, $arguments)) {
-                                $arguments[$name] = Parameters::typeDefaultValue($type);
-                            }
-                            continue;
-                        }
-
-                        $typeName = $type->getName();
-                        assert(class_exists($typeName) || interface_exists($typeName));
-
-                        // Instantiate classes or interfaces
-                        // Check if we have any custom resolver that helps us to map a specific variable for a class to a registered service
-                        $serviceName = $definitions->resolveName($name, $typeName, $class);
-
-                        // Find definition where id matches the name of the parameter
-                        if ($serviceName && $definitions->has($serviceName)) {
-                            $argument = $this->get($serviceName);
-                            assert(Parameters::valueMatchType($argument, $paramType));
-                            $arguments[$name] = $argument;
-                            continue;
-                        }
-
-                        // Or get based on type
-                        if ($this->has($typeName)) {
-                            $argument = $this->get($typeName);
-                            assert(Parameters::valueMatchType($argument, $paramType));
-                            $arguments[$name] = $argument;
-                            continue;
-                        }
-                    }
-                }
-
-                // It was resolved
-                if (array_key_exists($name, $arguments)) {
-                    continue;
-                }
-                // It's optional
-                if ($parameter->isOptional()) {
-                    continue;
-                }
-
-                // If we reached this, we didn't manage to create the argument
-                throw new UnresolvableParameterException("Unable to create object `$id`, missing parameter: `$name`");
-            }
+            $arguments = $this->resolveConstructorArguments($id, $class, $constructorParameters);
 
             // Wrap any exception in a ContainerException
             try {
@@ -180,6 +105,85 @@ class Container implements ContainerInterface
         }
 
         return $instance;
+    }
+
+    /**
+     * Resolve constructor arguments using definitions, resolvers, and container lookups
+     *
+     * @param string $id The service id being built
+     * @param class-string $class The concrete class being instantiated
+     * @param \ReflectionParameter[] $constructorParameters
+     * @return array<string,mixed>
+     * @throws UnresolvableParameterException
+     */
+    private function resolveConstructorArguments(string $id, string $class, array $constructorParameters): array
+    {
+        $definitions = $this->definitions;
+
+        $definedParameters = $definitions->allParametersFor($class, $id);
+        foreach ($definedParameters as $paramName => $paramValue) {
+            if ($paramValue instanceof ServiceName) {
+                $definedParameters[$paramName] = $this->get($paramValue->name);
+            }
+        }
+
+        $arguments = [];
+        foreach ($constructorParameters as $parameter) {
+            $name = $parameter->getName();
+
+            // It is provided by definitions (and not null), skip
+            if (isset($definedParameters[$name])) {
+                $arguments[$name] = $definedParameters[$name];
+                continue;
+            }
+
+            // Fetch from container based on argument type
+            $paramType = $parameter->getType();
+            $types = Parameters::getParameterTypes($parameter);
+            foreach ($types as $type) {
+                if ($type instanceof ReflectionNamedType) {
+                    // Built-in types (string, int, etc.) cannot be resolved from the container
+                    if ($type->isBuiltin()) {
+                        continue;
+                    }
+
+                    $typeName = $type->getName();
+                    assert(class_exists($typeName) || interface_exists($typeName));
+
+                    // Check if we have any custom resolver that maps this variable to a registered service
+                    $serviceName = $definitions->resolveName($name, $typeName, $class);
+
+                    // Find definition where id matches the name of the parameter
+                    if ($serviceName && $definitions->has($serviceName)) {
+                        $argument = $this->get($serviceName);
+                        assert(Parameters::valueMatchType($argument, $paramType));
+                        $arguments[$name] = $argument;
+                        continue;
+                    }
+
+                    // Or get based on type
+                    if ($this->has($typeName)) {
+                        $argument = $this->get($typeName);
+                        assert(Parameters::valueMatchType($argument, $paramType));
+                        $arguments[$name] = $argument;
+                        continue;
+                    }
+                }
+            }
+
+            // It was resolved
+            if (array_key_exists($name, $arguments)) {
+                continue;
+            }
+            // It's optional
+            if ($parameter->isOptional()) {
+                continue;
+            }
+
+            throw new UnresolvableParameterException("Unable to create object `$id`, missing parameter: `$name`");
+        }
+
+        return $arguments;
     }
 
     /**
@@ -202,7 +206,7 @@ class Container implements ContainerInterface
             return $this;
         }
         // If we need an injector, pass an injector that knows about the container
-        if ($id === Injector::class && $this->definitions->miss(Injector::class)) {
+        if ($id === Injector::class && !$this->definitions->has(Injector::class)) {
             return new Injector($this);
         }
         // A cached instance does not exist yet, build it
@@ -235,7 +239,7 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Call additionnal methods after instantiation
+     * Call additional methods after instantiation
      * Callbacks will match based on the class name and the id
      *
      * @param object $instance The instance to configure
@@ -269,16 +273,5 @@ class Container implements ContainerInterface
         foreach ($callbacks as $closure) {
             $closure($instance, $this);
         }
-    }
-
-    /**
-     * When cloning, clear any cached instance
-     *
-     * @return void
-     */
-    public function __clone()
-    {
-        $this->building = [];
-        $this->instances = [];
     }
 }

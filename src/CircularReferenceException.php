@@ -4,7 +4,10 @@ declare(strict_types=1);
 
 namespace Kaly\Di;
 
-class CircularReferenceException extends ContainerException
+use Exception;
+use Psr\Container\ContainerExceptionInterface;
+
+final class CircularReferenceException extends Exception implements ContainerExceptionInterface
 {
     // empty
 }

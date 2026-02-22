@@ -24,4 +24,4 @@ return RectorConfig::configure()
         ExplicitNullableParamTypeRector::class,
     ])
     ->withPreparedSets(typeDeclarations: true)
-    ->withPhpSets(php82: true);
+    ->withPhpSets(php83: true);

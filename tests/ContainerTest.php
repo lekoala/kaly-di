@@ -64,9 +64,10 @@ class ContainerTest extends TestCase
     {
         $di = new Container(Definitions::create()
             ->bindAll(TestObject6::class)
+            ->parameter(TestObject6::class, 'v', 'test')
+            ->parameter(TestObject6::class, 'v2', 'test2')
+            ->parameter(TestObject6::class, 'arr', [])
             ->containerParameter(TestZIntersectionClass::class, 'v', TestObject6::class)
-            // Same as
-            // ->parameter(TestZIntersectionClass::class, 'v', new ServiceName(TestObject6::class))
             ->lock());
         $inst = $di->get(TestZIntersectionClass::class);
         $this->assertInstanceOf(TestZIntersectionClass::class, $inst);
@@ -189,7 +190,7 @@ class ContainerTest extends TestCase
         $app = new TestExtendedApp(__DIR__);
         $di = new Container(
             Definitions::create()
-                ->add($app) // Calling add make sure you bind the class to all its interfaces/subclasses as well
+                ->register($app) // Calling register binds the class to all its interfaces/subclasses as well
         );
 
         // Get by exact class name
@@ -258,19 +259,13 @@ class ContainerTest extends TestCase
     }
 
     /**
-     * IT throws an UnresolvableParameterException if the parameter is missing from the container
+     * It throws an UnresolvableParameterException if the parameter is missing from the container
      */
     public function testBuildMissingParameter(): void
     {
-        // This doesn't throw UnresolvableParameterException because we don't know that '' is an invalid dsn
-        $this->expectException(ContainerException::class);
-        $di = new Container();
-        $di->get(PDO::class);
-
-        // This however does properly throw the custom exception
         $this->expectException(UnresolvableParameterException::class);
         $di = new Container();
-        $di->get(TestObject3::class);
+        $di->get(PDO::class);
     }
 
     /**
@@ -307,11 +302,12 @@ class ContainerTest extends TestCase
             // lazy pdo
             ->set(PDO::class, fn(): \PDO => new PDO('sqlite::memory:'))
             // parameters array
-            ->parametersArray(TestObject4::class, [
-                'bar' => 'bar-value',
-                'baz' => 'baz-value',
-                'arr' => ['a', 'b', 'c']
-            ]);
+            ->parameters(
+                TestObject4::class,
+                bar: 'bar-value',
+                baz: 'baz-value',
+                arr: ['a', 'b', 'c']
+            );
 
         $di = new Container($definitions);
         $inst = $di->get(TestObject4::class);
@@ -479,6 +475,7 @@ class ContainerTest extends TestCase
         $pdo = new PDO('sqlite::memory:');
         $definitions = Definitions::create()
             ->set(PDO::class, $pdo)
+            ->parameter(TestObject2::class, 'v', 'initial')
             ->callback(TestObject2::class, function (TestObject2 $obj) use ($i): void {
                 $i++;
                 $obj->v = 'value is ' . $i;
@@ -604,24 +601,5 @@ class ContainerTest extends TestCase
         $inst = $di->get(TestObject::class);
         $this->assertCount(1, $definitions->callbacksFor(TestObject::class));
         $this->assertSame('baz', $inst->getVal());
-    }
-
-    /**
-     * Cloning allows to get a "fresh" container with no cache
-     */
-    public function testClone(): void
-    {
-        $pdo = new PDO('sqlite::memory:');
-        $definitions = Definitions::create()
-            ->set(PDO::class, $pdo)
-            ->parameter(TestObject4::class, 'bar', 'bar-value')
-            ->parameter(TestObject4::class, 'baz', 'baz-value');
-
-        $di = new Container($definitions);
-        $inst = $di->get(TestObject4::class);
-        $di2 = clone $di;
-        $inst2 = $di2->get(TestObject4::class);
-
-        $this->assertNotSame($inst, $inst2);
     }
 }

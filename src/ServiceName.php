@@ -5,12 +5,15 @@ declare(strict_types=1);
 namespace Kaly\Di;
 
 /**
- * Reference a specific entry from the container
- * Can be used when setting parameters for a class
+ * References a container entry by name within parameter definitions
+ *
+ * Use Definitions::containerParameter() instead of constructing this directly.
+ *
+ * @internal
  */
-class ServiceName
+final class ServiceName
 {
-    public string $name;
+    public readonly string $name;
     public function __construct(string $name)
     {
         $this->name = $name;

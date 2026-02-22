@@ -33,7 +33,7 @@ class ReflTestMock
 
     public function methodWithContainer(
         stdClass $param1,
-        string $param2
+        ?string $param2 = null
     ): void {
         // empty
     }

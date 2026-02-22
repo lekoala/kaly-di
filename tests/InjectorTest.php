@@ -23,40 +23,34 @@ class InjectorTest extends TestCase
     public function testInjectorCreate(): void
     {
         $injector = new Injector();
-        $inst = $injector->make(TestObject5::class, v: 'test', v2: 'test');
+        $inst = $injector->make(TestObject5::class, v: 'test', v2: 'test', arr: []);
 
         $this->assertInstanceOf(TestObject5::class, $inst);
         $this->assertEquals('test', $inst->v);
         $this->assertEquals('test', $inst->v2);
-        $this->assertEquals([], $inst->arr); // it was provided automatically
+        $this->assertEquals([], $inst->arr);
         $this->assertEquals(null, $inst->v3); // its nullable
 
         // You can also use ...array if you don't like named arguments
-        $inst = $injector->make(TestObject5::class, ...['v' => 'test', 'v2' => 'test']);
+        $inst = $injector->make(TestObject5::class, ...['v' => 'test', 'v2' => 'test', 'arr' => []]);
         $this->assertEquals($inst, $inst);
 
         $definitions = Definitions::create()
             ->parameter(TestObject5::class, 'v', 'from definitions')
+            ->parameter(TestObject5::class, 'v2', 'from definitions v2')
+            ->parameter(TestObject5::class, 'arr', [])
             ->lock();
 
         $container = new Container($definitions);
         $injectorContainer = new Injector($container);
-
-        // make() creates a fresh class without taking the definitions into account
-        // This time, we skip 'v'
-        $inst = $injector->make(TestObject5::class, v2: 'test');
-        $this->assertEquals('', $inst->v);
-        $this->assertEquals('test', $inst->v2);
 
         // but with the container, the definitions are used
         $parameters = $definitions->allParametersFor(TestObject5::class);
         $this->assertEquals('from definitions', $parameters['v']);
 
         $instFromContainer = $container->get(TestObject5::class);
-        $this->assertNotEquals($inst, $instFromContainer);
         $this->assertEquals('from definitions', $instFromContainer->v);
-        // Injector will return empty strings if nulls are not accepted
-        $this->assertEquals('', $instFromContainer->v2);
+        $this->assertNull($instFromContainer->v3);
 
         // if object has been created by container, the injector will use it
         $fn = fn(TestObject5 $a): \Kaly\Tests\Mocks\TestObject5 => $a;
@@ -76,9 +70,10 @@ class InjectorTest extends TestCase
         $injector = new Injector();
         $fn = fn(): string => 'test';
         $this->assertEquals('test', $injector->invoke($fn));
-        // no value = empty string
+        // required built-in params now throw
         $fn = fn(string $a): string => $a;
-        $this->assertEquals('', $injector->invoke($fn));
+        $this->expectException(\ArgumentCountError::class);
+        $injector->invoke($fn);
         // provide a value (named)
         $fn = fn(string $a, string $b): string => $a . $b;
         $this->assertEquals('testother', $injector->invoke($fn, b: 'other', a: 'test'));
@@ -90,12 +85,12 @@ class InjectorTest extends TestCase
         $this->assertEquals('testother', $injector->invoke($fn, 'test', 'other'));
         $fn = fn(string $a, ?string $b, ?string $c): string => $a . $b . $c;
         $this->assertEquals('testother', $injector->invoke($fn, 'test', null, 'other'));
-        // you can use invokeArray syntax (named, positional)
+        // you can use ...spread syntax (named, positional)
         $fn = fn(string $a): string => $a;
-        $this->assertEquals('test', $injector->invokeArray($fn, [
+        $this->assertEquals('test', $injector->invoke($fn, ...[
             'a' => 'test'
         ]));
-        $this->assertEquals('test', $injector->invokeArray($fn, [
+        $this->assertEquals('test', $injector->invoke($fn, ...[
             'test'
         ]));
         // complex types
@@ -139,20 +134,22 @@ class InjectorTest extends TestCase
     }
 
     /**
-     * Test calling makeArray
+     * Test calling make with spread arrays
      *
      * @return void
      */
-    public function testMakeArray(): void
+    public function testMakeWithSpread(): void
     {
         $injector = new Injector();
-        $inst = $injector->makeArray(TestObject5::class, ['v' => 'test', 'v2' => 'test2']);
+        $inst = $injector->make(TestObject5::class, ...['v' => 'test', 'v2' => 'test2', 'arr' => ['a']]);
         $this->assertEquals('test', $inst->v);
         $this->assertEquals('test2', $inst->v2);
+        $this->assertEquals(['a'], $inst->arr);
 
         // positional should work
-        $inst2 = $injector->makeArray(TestObject5::class, ['test', 'test2']);
+        $inst2 = $injector->make(TestObject5::class, ...['test', 'test2', ['b']]);
         $this->assertEquals('test', $inst2->v);
         $this->assertEquals('test2', $inst2->v2);
+        $this->assertEquals(['b'], $inst2->arr);
     }
 }

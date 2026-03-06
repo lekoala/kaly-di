@@ -151,8 +151,8 @@ final class Parameters
                     }
                     $resolvedArguments[$paramName] = $providedVariadic;
                 } else {
-                    // Merge remaining arguments
-                    $resolvedArguments = array_merge($resolvedArguments, array_slice($arguments, $count));
+                    // Spread remaining arguments
+                    $resolvedArguments = [...$resolvedArguments, ...array_slice($arguments, $count)];
                 }
 
                 // Variadic is always the last parameter
@@ -248,16 +248,24 @@ final class Parameters
         $flat = [];
         foreach ($parameters as $parameter) {
             $name = $parameter->getName();
-            if (array_key_exists($name, $resolvedArguments)) {
-                if ($parameter->isVariadic() && is_array($resolvedArguments[$name])) {
+            $pos = $parameter->getPosition();
+            if ($parameter->isVariadic()) {
+                if (array_key_exists($name, $resolvedArguments) && is_array($resolvedArguments[$name])) {
                     foreach ($resolvedArguments[$name] as $v) {
                         $flat[] = $v;
                     }
                 } else {
-                    $flat[] = $resolvedArguments[$name];
+                    // Positional variadic arguments are already in $resolvedArguments starting from $pos
+                    for ($i = $pos; array_key_exists($i, $resolvedArguments); $i++) {
+                        $flat[] = $resolvedArguments[$i];
+                    }
                 }
-            } elseif (array_key_exists($parameter->getPosition(), $resolvedArguments)) {
-                $flat[] = $resolvedArguments[$parameter->getPosition()];
+            } else {
+                if (array_key_exists($name, $resolvedArguments)) {
+                    $flat[] = $resolvedArguments[$name];
+                } elseif (array_key_exists($pos, $resolvedArguments)) {
+                    $flat[] = $resolvedArguments[$pos];
+                }
             }
         }
         return $flat;

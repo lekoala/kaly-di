@@ -99,7 +99,7 @@ class Container implements ContainerInterface
                 $instance = $reflection->newInstanceArgs($flatArguments);
             } catch (Exception $e) {
                 $type = $e::class;
-                throw new ContainerException("Unable to create object `$id`, threw exception: `{$type}` with message `{$e->getMessage()}`");
+                throw new ContainerException("Unable to create object `$id`, threw exception: `{$type}`", 0, $e);
             }
         } finally {
             unset($this->building[$class]);
@@ -169,7 +169,9 @@ class Container implements ContainerInterface
         } catch (\InvalidArgumentException $e) {
             $type = $e::class;
             throw new ContainerException(
-                "Unable to create object `$id`, threw exception: `{$type}` with message `{$e->getMessage()}`"
+                "Unable to create object `$id`, threw exception: `{$type}`",
+                0,
+                $e
             );
         }
     }

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kaly\Tests;
 
 use AssertionError;
+use Kaly\Di\Container;
 use Kaly\Di\Definitions;
 use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestObject;
@@ -259,5 +260,15 @@ class DefinitionsTest extends TestCase
             'z' => ['z' => $closure],
             'a' => ['a' => $closure]
         ], $def->getResolvers());
+    }
+
+    public function testCreateContainer(): void
+    {
+        $def = Definitions::create();
+        $def->set('test', TestObject::class);
+        $container = $def->createContainer();
+
+        $this->assertInstanceOf(Container::class, $container);
+        $this->assertTrue($container->has('test'));
     }
 }

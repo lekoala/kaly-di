@@ -107,6 +107,7 @@ final class Parameters
      * @param bool $throwOnMissing Whether to throw UnresolvableParameterException if a parameter cannot be resolved
      * @return array<mixed>
      * @throws UnresolvableParameterException
+     * @throws InvalidArgumentException
      */
     public static function resolveParameters(
         array $parameters,
@@ -151,7 +152,7 @@ final class Parameters
                     }
                     $resolvedArguments[$paramName] = $providedVariadic;
                 } else {
-                    // Spread remaining arguments
+                    // Merge remaining arguments
                     $resolvedArguments = [...$resolvedArguments, ...array_slice($arguments, $count)];
                 }
 
@@ -249,21 +250,21 @@ final class Parameters
         foreach ($parameters as $parameter) {
             $name = $parameter->getName();
             $pos = $parameter->getPosition();
-            if ($parameter->isVariadic()) {
-                if (array_key_exists($name, $resolvedArguments) && is_array($resolvedArguments[$name])) {
+            if (array_key_exists($name, $resolvedArguments)) {
+                if ($parameter->isVariadic() && is_array($resolvedArguments[$name])) {
                     foreach ($resolvedArguments[$name] as $v) {
                         $flat[] = $v;
                     }
                 } else {
-                    // Positional variadic arguments are already in $resolvedArguments starting from $pos
+                    $flat[] = $resolvedArguments[$name];
+                }
+            } elseif (array_key_exists($pos, $resolvedArguments)) {
+                if ($parameter->isVariadic()) {
+                    // Positional variadic arguments are merged into $resolvedArguments
                     for ($i = $pos; array_key_exists($i, $resolvedArguments); $i++) {
                         $flat[] = $resolvedArguments[$i];
                     }
-                }
-            } else {
-                if (array_key_exists($name, $resolvedArguments)) {
-                    $flat[] = $resolvedArguments[$name];
-                } elseif (array_key_exists($pos, $resolvedArguments)) {
+                } else {
                     $flat[] = $resolvedArguments[$pos];
                 }
             }

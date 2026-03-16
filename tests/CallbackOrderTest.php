@@ -30,9 +30,8 @@ class CallbackOrderTest extends TestCase
         /** @var OrderChild $child */
         $child = $container->get(OrderChild::class);
 
-        // Potential outcome of my fix (sorting interfaces alphabetically):
-        // I1, I2 (alphabetical depends on names, here IOrder1, IOrder2)
-        // Then Parent, then Child
+        // Sorted interfaces alphabetically (IOrder1, IOrder2 -> I1, I2)
+        // Then parents (OrderParent -> Parent), then concrete (OrderChild -> Child)
         $expected = ['I1', 'I2', 'Parent', 'Child'];
         $this->assertEquals($expected, $child->log, "Order for concrete class is incorrect");
 

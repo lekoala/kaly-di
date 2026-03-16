@@ -128,8 +128,14 @@ class ContainerTest extends TestCase
             ->lock());
 
         $this->expectException(ContainerException::class);
-        $this->expectExceptionMessageMatches('/must be an array when passed by name/');
-        $di->get(TestVariadicArg::class);
+        try {
+            $di->get(TestVariadicArg::class);
+        } catch (ContainerException $e) {
+            $this->assertStringContainsString('Unable to create object', $e->getMessage());
+            $this->assertNotNull($e->getPrevious());
+            $this->assertStringContainsString('must be an array when passed by name', $e->getPrevious()->getMessage());
+            throw $e;
+        }
     }
 
     /**

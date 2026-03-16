@@ -14,10 +14,9 @@ use Kaly\Tests\Mocks\TestObject2;
 use Kaly\Tests\Mocks\TestAltInterface;
 use Kaly\Tests\Mocks\TestApp;
 use Kaly\Tests\Mocks\TestExtendedApp;
-
-class TestGrandparent {}
-class TestParent extends TestGrandparent {}
-class TestChild extends TestParent {}
+use Kaly\Tests\Mocks\TestChild;
+use Kaly\Tests\Mocks\TestGrandparent;
+use Kaly\Tests\Mocks\TestParent;
 
 class DefinitionsTest extends TestCase
 {

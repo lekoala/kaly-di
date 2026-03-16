@@ -448,14 +448,24 @@ final class Definitions
     public function callbacksForClass(string $class): array
     {
         assert(class_exists($class));
+        $interfaces = class_implements($class) ?: [];
         $parents = class_parents($class) ?: [];
+
+        // Sort interfaces alphabetically for deterministic execution order
+        ksort($interfaces);
+
         $callbacks = [];
-        // Use array_values to avoid callbacks being overwritten since they could share the same index
-        // We reverse parents to have them in order from top to bottom
+        // 1. Interfaces
+        foreach ($interfaces as $interface) {
+            $callbacks = array_merge($callbacks, array_values($this->callbacksFor($interface)));
+        }
+        // 2. Parents (top-to-bottom)
         foreach (array_reverse($parents) as $parent) {
             $callbacks = array_merge($callbacks, array_values($this->callbacksFor($parent)));
         }
+        // 3. Concrete class
         $callbacks = array_merge($callbacks, array_values($this->callbacksFor($class)));
+
         return $callbacks;
     }
 

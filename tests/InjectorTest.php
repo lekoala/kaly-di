@@ -158,6 +158,7 @@ class InjectorTest extends TestCase
         $injector = new Injector();
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/must be an array when passed by name/');
-        $injector->invoke(function (...$names) {}, names: 'not-an-array');
+        $injector->invoke(function (...$names) {
+        }, names: 'not-an-array');
     }
 }

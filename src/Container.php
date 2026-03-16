@@ -241,23 +241,13 @@ class Container implements ContainerInterface
         $definitions = $this->definitions;
         $instanceClass = $instance::class;
 
-        // Get callbacks defined specifically for the instance's concrete class
-        $instanceCallbacks = $definitions->callbacksForClass($instanceClass); // Includes parents
+        // Get callbacks defined for the class and its hierarchy (now including interfaces)
+        $callbacks = $definitions->callbacksForClass($instanceClass);
 
-        // Get callbacks defined for the requested ID (which might be the class itself, an interface, or a service name)
-        $idCallbacks = array_values($definitions->callbacksFor($id));
-
-        $callbacks = [];
-        if ($instanceClass === $id) {
-            // If ID is the concrete class, instanceCallbacks already contains everything needed.
-            $callbacks = $instanceCallbacks;
-        } elseif (interface_exists($id, false)) {
-            // For interfaces: Interface callbacks run first, then concrete class callbacks.
-            $callbacks = array_merge($idCallbacks, $instanceCallbacks);
-        } else {
-            // For named services (or potentially abstract classes used as IDs):
-            // Concrete class callbacks run first, then specific service ID callbacks.
-            $callbacks = array_merge($instanceCallbacks, $idCallbacks);
+        // If requested by a specific ID (that is not the class itself or an interface already covered),
+        // we append specific callbacks for that ID.
+        if ($id !== $instanceClass && !interface_exists($id, false)) {
+            $callbacks = array_merge($callbacks, array_values($definitions->callbacksFor($id)));
         }
 
         foreach ($callbacks as $closure) {

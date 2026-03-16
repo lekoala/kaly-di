@@ -13,6 +13,11 @@ use PHPUnit\Framework\TestCase;
 use Kaly\Tests\Mocks\TestObject2;
 use Kaly\Tests\Mocks\TestAltInterface;
 use Kaly\Tests\Mocks\TestApp;
+use Kaly\Tests\Mocks\TestExtendedApp;
+
+class TestGrandparent {}
+class TestParent extends TestGrandparent {}
+class TestChild extends TestParent {}
 
 class DefinitionsTest extends TestCase
 {
@@ -259,5 +264,40 @@ class DefinitionsTest extends TestCase
             'z' => ['z' => $closure],
             'a' => ['a' => $closure]
         ], $def->getResolvers());
+    }
+
+    public function testCallbacksForClass(): void
+    {
+        $def = Definitions::create();
+        $parentCallback = fn($obj) => $obj;
+        $childCallback = fn($obj) => $obj;
+
+        $def->callback(TestApp::class, $parentCallback);
+        $def->callback(TestExtendedApp::class, $childCallback);
+
+        $callbacks = $def->callbacksForClass(TestExtendedApp::class);
+
+        $this->assertCount(2, $callbacks);
+        $this->assertSame($parentCallback, $callbacks[0]);
+        $this->assertSame($childCallback, $callbacks[1]);
+    }
+
+    public function testCallbacksForClassInheritanceOrder(): void
+    {
+        $def = Definitions::create();
+        $grandparentCallback = fn($obj) => 'grandparent';
+        $parentCallback = fn($obj) => 'parent';
+        $childCallback = fn($obj) => 'child';
+
+        $def->callback(TestGrandparent::class, $grandparentCallback);
+        $def->callback(TestParent::class, $parentCallback);
+        $def->callback(TestChild::class, $childCallback);
+
+        $callbacks = $def->callbacksForClass(TestChild::class);
+
+        $this->assertCount(3, $callbacks);
+        $this->assertSame($grandparentCallback, $callbacks[0]);
+        $this->assertSame($parentCallback, $callbacks[1]);
+        $this->assertSame($childCallback, $callbacks[2]);
     }
 }

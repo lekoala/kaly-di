@@ -451,7 +451,8 @@ final class Definitions
         $parents = class_parents($class) ?: [];
         $callbacks = [];
         // Use array_values to avoid callbacks being overwritten since they could share the same index
-        foreach ($parents as $parent) {
+        // We reverse parents to have them in order from top to bottom
+        foreach (array_reverse($parents) as $parent) {
             $callbacks = array_merge($callbacks, array_values($this->callbacksFor($parent)));
         }
         $callbacks = array_merge($callbacks, array_values($this->callbacksFor($class)));

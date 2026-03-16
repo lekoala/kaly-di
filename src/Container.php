@@ -142,7 +142,7 @@ class Container implements ContainerInterface
 
             $types = Parameters::getParameterTypes($parameter);
             foreach ($types as $type) {
-                if ($type instanceof \ReflectionNamedType && !$type->isBuiltin()) {
+                if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
                     $typeName = $type->getName();
                     assert(class_exists($typeName) || interface_exists($typeName));
                     /** @var class-string $typeName */

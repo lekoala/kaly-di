@@ -107,6 +107,7 @@ final class Parameters
      * @param bool $throwOnMissing Whether to throw UnresolvableParameterException if a parameter cannot be resolved
      * @return array<mixed>
      * @throws UnresolvableParameterException
+     * @throws InvalidArgumentException
      */
     public static function resolveParameters(
         array $parameters,

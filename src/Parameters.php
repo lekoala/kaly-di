@@ -94,7 +94,7 @@ final class Parameters
                     'object' => is_object($value),
                     'false' => $value === false,
                     'true' => $value === true,
-                    'null' => $value === null,
+                    'null' => false, // $value is guaranteed not to be null here
                     default => get_debug_type($value) === $typeName,
                 };
             }

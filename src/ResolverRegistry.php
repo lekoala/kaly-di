@@ -85,8 +85,10 @@ final class ResolverRegistry
                 continue;
             }
 
-            $isType = $typeExistsCache[$key] ?? ($typeExistsCache[$key] = class_exists($key) || interface_exists($key));
-            if ($isType && is_a($class, $key, true)) {
+            $keyStr = (string)$key;
+            /** @var array<string, bool> $typeExistsCache */
+            $isType = $typeExistsCache[$keyStr] ?? ($typeExistsCache[$keyStr] = class_exists($keyStr) || interface_exists($keyStr));
+            if ($isType && is_a($class, $keyStr, true)) {
                 $serviceName = $value instanceof Closure ? $value($name, $class) : $value;
                 assert(is_string($serviceName));
                 return $serviceName;

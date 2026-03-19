@@ -86,8 +86,17 @@ final class Parameters
                 return false;
             }
             if ($type->isBuiltin()) {
-                // get_debug_type() function returns the exact types that you use in scalar typing.
-                return get_debug_type($value) === $type->getName();
+                $typeName = $type->getName();
+                return match ($typeName) {
+                    'mixed' => true,
+                    'iterable' => is_iterable($value),
+                    'callable' => is_callable($value),
+                    'object' => is_object($value),
+                    'false' => $value === false,
+                    'true' => $value === true,
+                    'null' => false, // $value is guaranteed not to be null here
+                    default => get_debug_type($value) === $typeName,
+                };
             }
             // Check if value is an object before calling is_a
             if (is_object($value)) {

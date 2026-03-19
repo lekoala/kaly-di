@@ -60,6 +60,62 @@ class ParametersTest extends TestCase
         $this->assertInstanceOf(ReflectionIntersectionType::class, $types[0]);
     }
 
+    public function testValueMatchTypeBuiltins(): void
+    {
+        $reflection = new ReflectionClass(ReflTestMock::class);
+        $method = $reflection->getMethod('methodWithBuiltinTypes');
+        $params = $method->getParameters();
+
+        // mixed
+        $this->assertTrue(Parameters::valueMatchType(1, $params[0]->getType()));
+        $this->assertTrue(Parameters::valueMatchType('test', $params[0]->getType()));
+
+        // iterable
+        $this->assertTrue(Parameters::valueMatchType([], $params[1]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(1, $params[1]->getType()));
+
+        // callable
+        $this->assertTrue(Parameters::valueMatchType(function () {}, $params[2]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(1, $params[2]->getType()));
+
+        // object
+        $this->assertTrue(Parameters::valueMatchType(new stdClass(), $params[3]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(1, $params[3]->getType()));
+
+        // bool
+        $this->assertTrue(Parameters::valueMatchType(true, $params[4]->getType()));
+        $this->assertTrue(Parameters::valueMatchType(false, $params[4]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(1, $params[4]->getType()));
+
+        // int
+        $this->assertTrue(Parameters::valueMatchType(1, $params[5]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(1.1, $params[5]->getType()));
+
+        // float
+        $this->assertTrue(Parameters::valueMatchType(1.1, $params[6]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(1, $params[6]->getType()));
+
+        // string
+        $this->assertTrue(Parameters::valueMatchType('test', $params[7]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(1, $params[7]->getType()));
+
+        // array
+        $this->assertTrue(Parameters::valueMatchType([], $params[8]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(1, $params[8]->getType()));
+
+        // false
+        $this->assertTrue(Parameters::valueMatchType(false, $params[9]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(true, $params[9]->getType()));
+
+        // true
+        $this->assertTrue(Parameters::valueMatchType(true, $params[10]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(false, $params[10]->getType()));
+
+        // null
+        $this->assertTrue(Parameters::valueMatchType(null, $params[11]->getType()));
+        $this->assertFalse(Parameters::valueMatchType(1, $params[11]->getType()));
+    }
+
     public function testValueMatchType(): void
     {
         $reflection = new ReflectionClass(ReflTestMock::class);

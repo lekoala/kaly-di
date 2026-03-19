@@ -49,4 +49,21 @@ class ReflTestMock
     ) {
         // empty
     }
+
+    public function methodWithBuiltinTypes(
+        mixed $mixed,
+        iterable $iterable,
+        callable $callable,
+        object $object,
+        bool $bool,
+        int $int,
+        float $float,
+        string $string,
+        array $array,
+        false $false,
+        true $true,
+        null $null
+    ) {
+        // empty
+    }
 }

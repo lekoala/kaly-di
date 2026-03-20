@@ -84,11 +84,7 @@ class Container implements ContainerInterface
             }
             $this->building[$class] = true;
 
-            $reflection = new ReflectionClass($class);
-            $constructor = $reflection->getConstructor();
-
-            // Collect constructor's arguments. There might be no constructor
-            $constructorParameters = $constructor ? $constructor->getParameters() : [];
+            [$reflection, $constructorParameters] = ReflectionCache::get($class);
 
             $arguments = $this->resolveConstructorArguments($id, $class, $constructorParameters);
 

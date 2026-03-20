@@ -57,7 +57,7 @@ final class Injector
      */
     public function make(string $class, ...$arguments)
     {
-        $reflection = new ReflectionClass($class);
+        [$reflection, $parameters] = ReflectionCache::get($class);
 
         // If we try to instantiate an interface, we need the container to map it to a class
         if ($reflection->isInterface()) {
@@ -71,11 +71,6 @@ final class Injector
             $instance = $this->make($resolved::class, ...$arguments);
             return $instance;
         }
-
-        $constructor = $reflection->getConstructor();
-
-        // Collect constructor's arguments. There might be no constructor
-        $parameters = $constructor ? $constructor->getParameters() : [];
 
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
         $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);

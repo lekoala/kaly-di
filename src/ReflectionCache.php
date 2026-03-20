@@ -15,13 +15,14 @@ use ReflectionParameter;
 final class ReflectionCache
 {
     /**
-     * @var array<string,array{ReflectionClass, ReflectionParameter[]}>
+     * @var array<string,array{ReflectionClass<object>, ReflectionParameter[]}>
      */
     private static array $classes = [];
 
     /**
-     * @param class-string $class
-     * @return array{ReflectionClass, ReflectionParameter[]}
+     * @template T of object
+     * @param class-string<T> $class
+     * @return array{ReflectionClass<T>, ReflectionParameter[]}
      */
     public static function get(string $class): array
     {

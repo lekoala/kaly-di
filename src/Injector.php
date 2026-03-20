@@ -44,9 +44,7 @@ final class Injector
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
         $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
 
-        $result = $reflection->invoke(...$flatArguments);
-
-        return $result;
+        return $reflection->invoke(...$flatArguments);
     }
 
     /**

@@ -44,9 +44,7 @@ final class Injector
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
         $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
 
-        $result = $reflection->invoke(...$flatArguments);
-
-        return $result;
+        return $reflection->invoke(...$flatArguments);
     }
 
     /**
@@ -69,9 +67,7 @@ final class Injector
             // Resolve to the concrete class via the container, then build a fresh instance
             $resolved = $this->container->get($class);
             assert(is_object($resolved));
-            /** @var T $instance */
-            $instance = $this->make($resolved::class, ...$arguments);
-            return $instance;
+            return $this->make($resolved::class, ...$arguments);
         }
 
         $constructor = $reflection->getConstructor();
@@ -82,9 +78,6 @@ final class Injector
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
         $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
 
-        /** @var T $instance */
-        $instance = $reflection->newInstanceArgs($flatArguments);
-
-        return $instance;
+        return $reflection->newInstanceArgs($flatArguments);
     }
 }

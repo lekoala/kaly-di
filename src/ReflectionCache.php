@@ -33,6 +33,8 @@ final class ReflectionCache
             self::$classes[$class] = [$reflection, $parameters];
         }
 
-        return self::$classes[$class];
+        /** @var array{ReflectionClass<T>, ReflectionParameter[]} $result */
+        $result = self::$classes[$class];
+        return $result;
     }
 }

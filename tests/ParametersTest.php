@@ -375,4 +375,53 @@ class ParametersTest extends TestCase
 
         Parameters::resolveParameters($parameters, $arguments);
     }
+
+    public function testFlattenArguments(): void
+    {
+        $reflection = new ReflectionClass(ReflTestMock::class);
+        $method = $reflection->getMethod('methodWithManyParams');
+        $parameters = $method->getParameters();
+
+        // 1. All named arguments
+        $resolvedNamed = [
+            'param1' => 'v1',
+            'param2' => 2,
+            'param3' => true,
+            'param4' => [],
+            'param5' => 0,
+            'param6' => false,
+            'param7' => null,
+            'param8' => null,
+            'variadic' => ['a', 'b']
+        ];
+        $flatNamed = Parameters::flattenArguments($parameters, $resolvedNamed);
+        $this->assertSame(['v1', 2, true, [], 0, false, null, null, 'a', 'b'], $flatNamed);
+
+        // 2. All positional arguments
+        $resolvedPositional = [
+            0 => 'v1',
+            1 => 2,
+            2 => true,
+            3 => [],
+            4 => 0,
+            5 => false,
+            6 => null,
+            7 => null,
+            8 => 'a',
+            9 => 'b'
+        ];
+        $flatPositional = Parameters::flattenArguments($parameters, $resolvedPositional);
+        $this->assertSame(['v1', 2, true, [], 0, false, null, null, 'a', 'b'], $flatPositional);
+
+        // 3. Empty arguments
+        $this->assertSame([], Parameters::flattenArguments([], []));
+
+        // 4. Variadic not as array in named
+        $resolvedNamedSingle = [
+            'param1' => 'v1',
+            'variadic' => 'single'
+        ];
+        $flatNamedSingle = Parameters::flattenArguments([$parameters[0], $parameters[8]], $resolvedNamedSingle);
+        $this->assertSame(['v1', 'single'], $flatNamedSingle);
+    }
 }

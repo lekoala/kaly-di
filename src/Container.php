@@ -221,7 +221,9 @@ class Container implements ContainerInterface
         }
         // Any existing class can be built without definition
         // It's the same has having SomeClass => null as a definition
-        return class_exists($id);
+        /** @var array<string,bool> $cache */
+        static $cache = [];
+        return $cache[$id] ??= class_exists($id);
     }
 
     /**

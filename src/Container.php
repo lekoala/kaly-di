@@ -248,7 +248,7 @@ class Container implements ContainerInterface
         // If requested by a specific ID (that is not the class itself or an interface already covered),
         // we append specific callbacks for that ID.
         if ($id !== $instanceClass && !interface_exists($id, false)) {
-            $callbacks = array_merge($callbacks, array_values($definitions->callbacksFor($id)));
+            $callbacks = [...$callbacks, ...array_values($definitions->callbacksFor($id))];
         }
 
         foreach ($callbacks as $closure) {

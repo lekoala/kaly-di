@@ -81,19 +81,19 @@ final class Definitions
 
     public function merge(Definitions $definitions): void
     {
-        $this->values = array_merge($this->values, $definitions->getValues());
+        $this->values = [...$this->values, ...$definitions->getValues()];
 
         foreach ($definitions->getCallbacks() as $key => $values) {
-            $this->callbacks[$key] = array_merge($this->callbacks[$key] ?? [], $values);
+            $this->callbacks[$key] = [...($this->callbacks[$key] ?? []), ...$values];
         }
 
         foreach ($definitions->getParameters() as $key => $values) {
-            $this->parameters[$key] = array_merge($this->parameters[$key] ?? [], $values);
+            $this->parameters[$key] = [...($this->parameters[$key] ?? []), ...$values];
         }
 
         $resolvers = $this->resolverRegistry->getResolvers();
         foreach ($definitions->getResolvers() as $key => $values) {
-            $resolvers[$key] = array_merge($resolvers[$key] ?? [], $values);
+            $resolvers[$key] = [...($resolvers[$key] ?? []), ...$values];
         }
         $this->resolverRegistry->setResolvers($resolvers);
     }
@@ -405,7 +405,7 @@ final class Definitions
      */
     public function allParametersFor(string $class, ?string $id = null): array
     {
-        return array_merge($this->parametersFor($class), $this->parametersFor($id));
+        return [...$this->parametersFor($class), ...$this->parametersFor($id)];
     }
 
     /**
@@ -471,14 +471,14 @@ final class Definitions
         $callbacks = [];
         // 1. Interfaces
         foreach ($interfaces as $interface) {
-            $callbacks = array_merge($callbacks, array_values($this->callbacksFor($interface)));
+            $callbacks = [...$callbacks, ...array_values($this->callbacksFor($interface))];
         }
         // 2. Parents (top-to-bottom)
         foreach (array_reverse($parents) as $parent) {
-            $callbacks = array_merge($callbacks, array_values($this->callbacksFor($parent)));
+            $callbacks = [...$callbacks, ...array_values($this->callbacksFor($parent))];
         }
         // 3. Concrete class
-        $callbacks = array_merge($callbacks, array_values($this->callbacksFor($class)));
+        $callbacks = [...$callbacks, ...array_values($this->callbacksFor($class))];
 
         return $callbacks;
     }

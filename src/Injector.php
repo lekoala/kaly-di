@@ -8,7 +8,6 @@ use Closure;
 use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 use ReflectionFunction;
-use ReflectionClass;
 
 /**
  * Invoke callables or create fresh objects with automatic dependency resolution

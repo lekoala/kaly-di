@@ -448,11 +448,23 @@ final class Definitions
     public function callbacksForClass(string $class): array
     {
         assert(class_exists($class));
-        $interfaces = class_implements($class) ?: [];
-        $parents = class_parents($class) ?: [];
 
-        // Sort interfaces alphabetically for deterministic execution order
-        ksort($interfaces);
+        static $interfacesCache = [];
+        static $parentsCache = [];
+
+        if (!isset($interfacesCache[$class])) {
+            $interfaces = class_implements($class) ?: [];
+            // Sort interfaces alphabetically for deterministic execution order
+            ksort($interfaces);
+            $interfacesCache[$class] = $interfaces;
+        }
+
+        if (!isset($parentsCache[$class])) {
+            $parentsCache[$class] = class_parents($class) ?: [];
+        }
+
+        $interfaces = $interfacesCache[$class];
+        $parents = $parentsCache[$class];
 
         $callbacks = [];
         // 1. Interfaces

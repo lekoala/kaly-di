@@ -449,7 +449,9 @@ final class Definitions
     {
         assert(class_exists($class));
 
+        /** @var array<class-string, array<string, string>> $interfacesCache */
         static $interfacesCache = [];
+        /** @var array<class-string, array<string, string>> $parentsCache */
         static $parentsCache = [];
 
         if (!isset($interfacesCache[$class])) {

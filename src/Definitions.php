@@ -282,7 +282,7 @@ final class Definitions
      * @param class-string $class
      * @return self
      */
-    public function bindAll(string $class)
+    public function bindAll(string $class): self
     {
         $interfaces = class_implements($class) ?: [];
         foreach ($interfaces as $interface) {

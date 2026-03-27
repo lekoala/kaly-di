@@ -75,7 +75,8 @@ class ParametersTest extends TestCase
         $this->assertFalse(Parameters::valueMatchType(1, $params[1]->getType()));
 
         // callable
-        $this->assertTrue(Parameters::valueMatchType(function () {}, $params[2]->getType()));
+        $this->assertTrue(Parameters::valueMatchType(function () {
+        }, $params[2]->getType()));
         $this->assertFalse(Parameters::valueMatchType(1, $params[2]->getType()));
 
         // object

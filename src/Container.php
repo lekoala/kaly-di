@@ -195,15 +195,18 @@ class Container implements ContainerInterface
         if ($id === Injector::class && !$this->definitions->has(Injector::class)) {
             return new Injector($this);
         }
-        // A cached instance does not exist yet, build it
-        if (!isset($this->instances[$id])) {
-            $instance = $this->build($id);
-            // These will run only once since we cache instances
-            $this->configure($instance, $id);
-            $this->instances[$id] = $instance;
-        }
         // Return cached instance
-        return $this->instances[$id];
+        if (isset($this->instances[$id])) {
+            return $this->instances[$id];
+        }
+
+        // A cached instance does not exist yet, build it
+        $instance = $this->build($id);
+        // These will run only once since we cache instances
+        $this->configure($instance, $id);
+        $this->instances[$id] = $instance;
+
+        return $instance;
     }
 
     /**

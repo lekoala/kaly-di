@@ -55,57 +55,66 @@ final class Parameters
             return true;
         }
 
-        if ($type instanceof ReflectionUnionType) {
-            foreach ($type->getTypes() as $t) {
-                // For Union: Return true on the first match
-                if (self::valueMatchType($value, $t)) {
-                    return true;
-                }
-            }
-            // If loop completes, no type matched
-            return false;
-        }
+        return match (true) {
+            $type instanceof ReflectionUnionType => self::matchUnionType($value, $type),
+            $type instanceof ReflectionIntersectionType => self::matchIntersectionType($value, $type),
+            $type instanceof ReflectionNamedType => self::matchNamedType($value, $type),
+            default => false,
+        };
+    }
 
-        if ($type instanceof ReflectionIntersectionType) {
-            foreach ($type->getTypes() as $t) {
-                // For Intersection: Return false on the first non-match
-                if (!self::valueMatchType($value, $t)) {
-                    return false;
-                }
-            }
-            // If loop completes, all types matched (and ReflectionIntersectionType must have types)
-            return true;
-        }
-
-        if ($type instanceof ReflectionNamedType) {
-            if ($type->allowsNull() && $value === null) {
+    private static function matchUnionType(mixed $value, ReflectionUnionType $type): bool
+    {
+        foreach ($type->getTypes() as $t) {
+            // For Union: Return true on the first match
+            if (self::valueMatchType($value, $t)) {
                 return true;
             }
-            // If value is null but type doesn't allow null, fail early
-            if ($value === null) {
+        }
+        // If loop completes, no type matched
+        return false;
+    }
+
+    private static function matchIntersectionType(mixed $value, ReflectionIntersectionType $type): bool
+    {
+        foreach ($type->getTypes() as $t) {
+            // For Intersection: Return false on the first non-match
+            if (!self::valueMatchType($value, $t)) {
                 return false;
             }
-            if ($type->isBuiltin()) {
-                $typeName = $type->getName();
-                return match ($typeName) {
-                    'mixed' => true,
-                    'iterable' => is_iterable($value),
-                    'callable' => is_callable($value),
-                    'object' => is_object($value),
-                    'false' => $value === false,
-                    'true' => $value === true,
-                    'null' => false, // $value is guaranteed not to be null here
-                    default => get_debug_type($value) === $typeName,
-                };
-            }
-            // Check if value is an object before calling is_a
-            if (is_object($value)) {
-                // works for instances or interfaces
-                return is_a($value, $type->getName());
-            }
+        }
+        // If loop completes, all types matched (and ReflectionIntersectionType must have types)
+        return true;
+    }
+
+    private static function matchNamedType(mixed $value, ReflectionNamedType $type): bool
+    {
+        if ($type->allowsNull() && $value === null) {
+            return true;
+        }
+        // If value is null but type doesn't allow null, fail early
+        if ($value === null) {
+            return false;
+        }
+        if ($type->isBuiltin()) {
+            $typeName = $type->getName();
+            return match ($typeName) {
+                'mixed' => true,
+                'iterable' => is_iterable($value),
+                'callable' => is_callable($value),
+                'object' => is_object($value),
+                'false' => $value === false,
+                'true' => $value === true,
+                'null' => false, // $value is guaranteed not to be null here
+                default => get_debug_type($value) === $typeName,
+            };
+        }
+        // Check if value is an object before calling is_a
+        if (is_object($value)) {
+            // works for instances or interfaces
+            return is_a($value, $type->getName());
         }
 
-        // If type is not built-in and value is not an object, it's a mismatch
         return false;
     }
 

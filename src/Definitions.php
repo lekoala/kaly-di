@@ -366,7 +366,7 @@ final class Definitions
      *
      * @param string $id
      * @param string $name
-     * @param mixed $value The actual value of the parameter. Pass a Closure to receive the container and resolve services lazily: fn($container) => $container->get('serviceName')
+     * @param mixed $value Literal value or Closure to resolve lazily
      * @return self
      */
     public function parameter(string $id, string $name, mixed $value): self

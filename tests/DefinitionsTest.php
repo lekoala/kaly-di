@@ -18,6 +18,9 @@ use Kaly\Tests\Mocks\TestExtendedApp;
 use Kaly\Tests\Mocks\TestChild;
 use Kaly\Tests\Mocks\TestGrandparent;
 use Kaly\Tests\Mocks\TestParent;
+use Kaly\Tests\Mocks\ReflTestMockInterface1;
+use Kaly\Tests\Mocks\ReflTestMockInterface2;
+use Kaly\Tests\Mocks\ReflTestMockObject;
 
 class DefinitionsTest extends TestCase
 {
@@ -130,6 +133,22 @@ class DefinitionsTest extends TestCase
         $def3 = Definitions::create();
         $def3->bind(TestObject2::class, TestInterface::class, ['v' => 'test']);
         $this->assertEquals(['v' => 'test'], $def3->parametersFor(TestObject2::class));
+    }
+
+    public function testBindAll(): void
+    {
+        $def = Definitions::create();
+        // Pre-set an interface to something else to test the "if not already set" behavior
+        $def->set(ReflTestMockInterface1::class, TestObject::class);
+
+        $def->bindAll(ReflTestMockObject::class);
+
+        // Interface 1 was already set, so it should NOT be overwritten
+        $this->assertEquals(TestObject::class, $def->get(ReflTestMockInterface1::class));
+
+        // Interface 2 was NOT set, so it should be bound to the class
+        $this->assertTrue($def->has(ReflTestMockInterface2::class));
+        $this->assertEquals(ReflTestMockObject::class, $def->get(ReflTestMockInterface2::class));
     }
 
     public function testResolve(): void

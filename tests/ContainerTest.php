@@ -69,7 +69,7 @@ class ContainerTest extends TestCase
             ->parameter(TestObject6::class, 'v', 'test')
             ->parameter(TestObject6::class, 'v2', 'test2')
             ->parameter(TestObject6::class, 'arr', [])
-            ->containerParameter(TestZIntersectionClass::class, 'v', TestObject6::class)
+            ->parameter(TestZIntersectionClass::class, 'v', fn($c) => $c->get(TestObject6::class))
             ->lock());
         $inst = $di->get(TestZIntersectionClass::class);
         $this->assertInstanceOf(TestZIntersectionClass::class, $inst);

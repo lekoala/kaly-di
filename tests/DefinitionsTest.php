@@ -85,14 +85,6 @@ class DefinitionsTest extends TestCase
         $this->assertEquals(TestObject::class, $def->get('key'));
         $this->assertNull($def->get('nonexistent'));
         $this->assertTrue(!$def->has('nonexistent'));
-
-        // Already sets, so does nothing
-        $def->setDefault('key', TestObject2::class);
-        $this->assertEquals(TestObject::class, $def->get('key'));
-
-        // Not set, so sets a value
-        $def->setDefault('newkey', TestObject2::class);
-        $this->assertEquals(TestObject2::class, $def->get('newkey'));
     }
 
     public function testExpand(): void

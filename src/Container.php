@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kaly\Di;
 
-use ReflectionClass;
+use Closure;
 use ReflectionNamedType;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
@@ -84,7 +84,7 @@ class Container implements ContainerInterface
             }
             $this->building[$class] = true;
 
-            [$reflection, $constructorParameters] = ReflectionCache::get($class);
+            [$reflection, $constructorParameters] = RuntimeCache::reflection($class);
 
             $arguments = $this->resolveConstructorArguments($id, $class, $constructorParameters);
 
@@ -121,8 +121,8 @@ class Container implements ContainerInterface
         $definedParameters = $definitions->allParametersFor($class, $id);
         $arguments = [];
         foreach ($definedParameters as $paramName => $paramValue) {
-            if ($paramValue instanceof ServiceName) {
-                $arguments[$paramName] = $this->get($paramValue->name);
+            if ($paramValue instanceof Closure) {
+                $arguments[$paramName] = $paramValue($this);
             } else {
                 $arguments[$paramName] = $paramValue;
             }
@@ -224,9 +224,7 @@ class Container implements ContainerInterface
         }
         // Any existing class can be built without definition
         // It's the same has having SomeClass => null as a definition
-        /** @var array<string,bool> $cache */
-        static $cache = [];
-        return $cache[$id] ??= class_exists($id);
+        return RuntimeCache::classExists($id);
     }
 
     /**

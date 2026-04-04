@@ -11,7 +11,6 @@ The library is composed of five main classes:
 3. **`ResolverRegistry`** *(internal)*: Internal component that manages complex auto-wiring rules.
 4. **`Parameters`**: A static helper using Reflection to analyze constructor signatures and match types with container entries.
 5. **`Injector`**: A utility for "on-demand" instantiation and invocation.
-6. **`ServiceName`** *(internal)*: A DTO used by `containerParameter()` to reference container entries.
 
 ## Design Decisions
 

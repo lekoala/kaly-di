@@ -16,14 +16,6 @@ $definitions = Definitions::create()
     ->set('app.cache', MyCache::class);            // Map to a class name (auto-wired)
 ```
 
-### Conditional Definitions
-
-You can define services only if they haven't been defined yet.
-
-```php
-$definitions->setDefault('logger', MonologLogger::class); // Only sets if 'logger' is not already defined
-```
-
 ## Binding Interfaces
 
 Use `register`, `bind`, or `bindAll` to map interfaces to concrete implementations.
@@ -36,7 +28,13 @@ $definitions->bind(UserInterface::class, MyUser::class);
 
 You can explicitly provide values for constructor parameters.
 
-### Positional or Named Parameters
+### Single Parameter
+
+```php
+$definitions->parameter(MyClass::class, 'apiKey', 'your-api-key');
+```
+
+### Multiple Parameters with Named Arguments
 
 ```php
 $definitions->parameters(MyClass::class, [
@@ -47,11 +45,29 @@ $definitions->parameters(MyClass::class, [
 
 ### Referencing Container Services
 
-To pass a service from the container as a parameter, use the `containerParameter` helper.
+To pass a service from the container as a parameter, pass a closure that receives the container:
 
 ```php
-$definitions->containerParameter(MyClass::class, 'db', 'db.connection');
+$definitions->parameter(MyClass::class, 'db', fn($container) => $container->get('db.connection'));
 ```
+
+The closure is resolved lazily when the object is instantiated, so it always gets the current state of the container.
+
+### Dynamic Resolution
+
+Since closures receive the container, you can implement conditional logic:
+
+```php
+$definitions->parameter(CacheService::class, 'driver', function($container) {
+    // Use Redis if available, fall back to file cache
+    if ($container->has(RedisConnection::class)) {
+        return $container->get(RedisConnection::class);
+    }
+    return $container->get(FileCache::class);
+});
+```
+
+This is useful for environment-based configuration, feature flags, or graceful degradation when optional services are not available.
 
 ## Registering Callbacks
 
@@ -90,6 +106,24 @@ Once a `Definitions` object is locked, it cannot be modified. This is useful for
 ```php
 $definitions->lock();
 // $definitions->set('c', 'v3'); // Throws an error (in development)
+```
+
+### Creating the Container
+
+`createContainer()` is the terminal method of the fluent chain. It creates the container and automatically locks the definitions:
+
+```php
+$container = Definitions::create()
+    ->set(PDO::class, fn() => new PDO('sqlite::memory:'))
+    ->createContainer(); // definitions are now locked
+```
+
+If you need to modify definitions after creating a container, create them first and pass them manually:
+
+```php
+$definitions = Definitions::create()->set(...);
+$container = new Container($definitions);
+// $definitions can still be modified
 ```
 
 ## Getting Fresh Instances

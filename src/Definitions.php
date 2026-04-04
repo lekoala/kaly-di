@@ -130,8 +130,17 @@ final class Definitions
         return $this->resolverRegistry->getResolvers();
     }
 
+    /**
+     * Create a container from these definitions and lock them.
+     *
+     * This is a terminal method in the fluent chain. After calling it,
+     * the definitions are locked and cannot be modified further.
+     *
+     * @return Container
+     */
     public function createContainer(): Container
     {
+        $this->lock();
         return new Container($this);
     }
 
@@ -203,13 +212,13 @@ final class Definitions
     }
 
     /**
-     * Add an entry if not set yet
+     * Add an entry if not set yet (internal use only)
      *
      * @param string $id
      * @param class-string|object|null $value
      * @return self
      */
-    public function setDefault(string $id, string|object|null $value = null): self
+    protected function setDefault(string $id, string|object|null $value = null): self
     {
         if ($this->has($id)) {
             return $this;
@@ -345,7 +354,7 @@ final class Definitions
      *
      * @param string $id
      * @param string $name
-     * @param mixed $value The actual value of the parameter. To specify a service name, pass a ServiceName class.
+     * @param mixed $value The actual value of the parameter. Pass a Closure to receive the container and resolve services lazily: fn($container) => $container->get('serviceName')
      * @return self
      */
     public function parameter(string $id, string $name, mixed $value): self
@@ -353,19 +362,6 @@ final class Definitions
         assert(!$this->locked);
         $this->parameters[$id][$name] = $value;
         return $this;
-    }
-
-    /**
-     * This is just a wrapper to specify a ServiceName from the container
-     *
-     * @param string $id
-     * @param string $name
-     * @param string $serviceName
-     * @return self
-     */
-    public function containerParameter(string $id, string $name, string $serviceName): self
-    {
-        return $this->parameter($id, $name, new ServiceName($serviceName));
     }
 
     /**
@@ -449,32 +445,15 @@ final class Definitions
     {
         assert(class_exists($class));
 
-        /** @var array<class-string, array<string, string>> $interfacesCache */
-        static $interfacesCache = [];
-        /** @var array<class-string, array<string, string>> $parentsCache */
-        static $parentsCache = [];
-
-        if (!isset($interfacesCache[$class])) {
-            $interfaces = class_implements($class) ?: [];
-            // Sort interfaces alphabetically for deterministic execution order
-            ksort($interfaces);
-            $interfacesCache[$class] = $interfaces;
-        }
-
-        if (!isset($parentsCache[$class])) {
-            $parentsCache[$class] = class_parents($class) ?: [];
-        }
-
-        $interfaces = $interfacesCache[$class];
-        $parents = $parentsCache[$class];
-
+        $hierarchy = RuntimeCache::classHierarchy($class);
         $callbacks = [];
-        // 1. Interfaces
-        foreach ($interfaces as $interface) {
+
+        // 1. Interfaces (already sorted alphabetically by RuntimeCache)
+        foreach ($hierarchy['interfaces'] as $interface) {
             $callbacks = array_merge($callbacks, array_values($this->callbacksFor($interface)));
         }
         // 2. Parents (top-to-bottom)
-        foreach (array_reverse($parents) as $parent) {
+        foreach (array_reverse($hierarchy['parents']) as $parent) {
             $callbacks = array_merge($callbacks, array_values($this->callbacksFor($parent)));
         }
         // 3. Concrete class

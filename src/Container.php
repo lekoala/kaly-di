@@ -140,7 +140,7 @@ class Container implements ContainerInterface
             foreach ($types as $type) {
                 if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
                     $typeName = $type->getName();
-                    assert(class_exists($typeName) || interface_exists($typeName));
+                    assert(RuntimeCache::typeExists($typeName));
                     /** @var class-string $typeName */
                     $serviceName = $definitions->resolveName($name, $typeName, $class);
 

@@ -159,6 +159,22 @@ class DefinitionsTest extends TestCase
         $this->assertEquals('value', $def->resolversFor(TestObject::class)['key']);
     }
 
+    public function testResolveAll(): void
+    {
+        $def = Definitions::create();
+        $resolver = fn(string $name, string $class): string => 'service';
+        $def->resolveAll(TestObject::class, $resolver);
+        $resolvers = $def->resolversFor(TestObject::class);
+        $this->assertArrayHasKey('*', $resolvers);
+        $this->assertSame($resolver, $resolvers['*']);
+    }
+
+    public function testResolversFor(): void
+    {
+        $def = Definitions::create();
+        $this->assertEquals([], $def->resolversFor('NonExistentClass'));
+    }
+
     public function testParameter(): void
     {
         $def = Definitions::create();

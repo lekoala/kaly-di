@@ -259,12 +259,11 @@ final class Definitions
     public function register(object $obj): self
     {
         assert(!$this->locked);
-        $interfaces = class_implements($obj) ?: [];
-        foreach ($interfaces as $interface) {
+        $hierarchy = RuntimeCache::classHierarchy($obj::class);
+        foreach ($hierarchy['interfaces'] as $interface) {
             $this->setDefault($interface, $obj);
         }
-        $parents = class_parents($obj) ?: [];
-        foreach ($parents as $parent) {
+        foreach ($hierarchy['parents'] as $parent) {
             $this->setDefault($parent, $obj);
         }
         $this->values[$obj::class] = $obj;
@@ -286,9 +285,9 @@ final class Definitions
 
         // If no interface is provided, binds to a single interface
         if ($interface === null) {
-            $interfaces = class_implements($class) ?: [];
+            $interfaces = RuntimeCache::classHierarchy($class)['interfaces'];
             assert(count($interfaces) === 1, "Class `$class` implements multiple interfaces");
-            $interface = (string)key($interfaces);
+            $interface = (string)current($interfaces);
         }
         assert($interface !== '' && interface_exists($interface), "Interface `$interface` does not exist");
         if (!empty($parameters)) {
@@ -305,7 +304,7 @@ final class Definitions
      */
     public function bindAll(string $class): self
     {
-        $interfaces = class_implements($class) ?: [];
+        $interfaces = RuntimeCache::classHierarchy($class)['interfaces'];
         foreach ($interfaces as $interface) {
             $this->setDefault($interface, $class);
         }

@@ -93,7 +93,7 @@ class Container implements ContainerInterface
                 $flatArguments = Parameters::flattenArguments($constructorParameters, $arguments);
                 /** @var object $instance */
                 $instance = $reflection->newInstanceArgs($flatArguments);
-            } catch (Exception $e) {
+            } catch (\Throwable $e) {
                 $type = $e::class;
                 throw new ContainerException("Unable to create object `$id`, threw exception: `{$type}`", 0, $e);
             }
@@ -157,12 +157,15 @@ class Container implements ContainerInterface
             /** @var array<string,mixed> $resolved */
             $resolved = Parameters::resolveParameters($constructorParameters, $arguments, $this, true);
             return $resolved;
-        } catch (UnresolvableParameterException $e) {
+        } catch (UnresolvableParameterException|CircularReferenceException $e) {
             // Rethrow with the exact Container error formatting
-            throw new UnresolvableParameterException(
-                "Unable to create object `$id`, missing parameter: `{$e->getParameterName()}`"
-            );
-        } catch (\InvalidArgumentException $e) {
+            if ($e instanceof UnresolvableParameterException) {
+                throw new UnresolvableParameterException(
+                    "Unable to create object `$id`, missing parameter: `{$e->getParameterName()}`"
+                );
+            }
+            throw $e;
+        } catch (\Throwable $e) {
             $type = $e::class;
             throw new ContainerException(
                 "Unable to create object `$id`, threw exception: `{$type}`",

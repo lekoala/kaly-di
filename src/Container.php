@@ -157,13 +157,13 @@ class Container implements ContainerInterface
             /** @var array<string,mixed> $resolved */
             $resolved = Parameters::resolveParameters($constructorParameters, $arguments, $this, true);
             return $resolved;
-        } catch (UnresolvableParameterException|CircularReferenceException $e) {
+        } catch (UnresolvableParameterException $e) {
             // Rethrow with the exact Container error formatting
-            if ($e instanceof UnresolvableParameterException) {
-                throw new UnresolvableParameterException(
-                    "Unable to create object `$id`, missing parameter: `{$e->getParameterName()}`"
-                );
-            }
+            throw new UnresolvableParameterException(
+                "Unable to create object `$id`, missing parameter: `{$e->getParameterName()}`"
+            );
+        } catch (CircularReferenceException $e) {
+            // Rethrow circular reference exceptions as-is
             throw $e;
         } catch (\Throwable $e) {
             $type = $e::class;

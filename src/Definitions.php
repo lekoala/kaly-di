@@ -289,7 +289,7 @@ final class Definitions
             assert(count($interfaces) === 1, "Class `$class` implements multiple interfaces");
             $interface = (string)current($interfaces);
         }
-        assert($interface !== '' && interface_exists($interface), "Interface `$interface` does not exist");
+        assert(interface_exists($interface), "Interface `$interface` does not exist");
         if (!empty($parameters)) {
             $this->parameters($class, ...$parameters);
         }

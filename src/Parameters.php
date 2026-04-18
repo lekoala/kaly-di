@@ -126,6 +126,7 @@ final class Parameters
      * @return array<mixed>
      * @throws UnresolvableParameterException
      * @throws InvalidArgumentException
+     * @throws CircularReferenceException When the container resolves a parameter that has circular dependencies
      */
     public static function resolveParameters(
         array $parameters,

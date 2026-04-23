@@ -5,11 +5,10 @@ declare(strict_types=1);
 namespace Kaly\Di;
 
 use Closure;
-use ReflectionNamedType;
+use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
-use Psr\Container\ContainerExceptionInterface;
-use Exception;
+use ReflectionNamedType;
 
 /**
  * A PSR-11 compliant dependency injection container
@@ -77,10 +76,10 @@ class Container implements ContainerInterface
         try {
             if (isset($this->building[$class])) {
                 $buildChain = implode(', ', array_keys($this->building));
-                throw new CircularReferenceException("Circular reference to `$class` in `{$buildChain}`");
+                throw new CircularReferenceException("Circular reference to `{$class}` in `{$buildChain}`");
             }
             if (!class_exists($class)) {
-                throw new ContainerException("Class `$class` does not exist");
+                throw new ContainerException("Class `{$class}` does not exist");
             }
             $this->building[$class] = true;
 
@@ -95,7 +94,7 @@ class Container implements ContainerInterface
                 $instance = $reflection->newInstanceArgs($flatArguments);
             } catch (\Throwable $e) {
                 $type = $e::class;
-                throw new ContainerException("Unable to create object `$id`, threw exception: `{$type}`", 0, $e);
+                throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
             }
         } finally {
             unset($this->building[$class]);
@@ -155,23 +154,18 @@ class Container implements ContainerInterface
         // 3. Delegate final resolution (type-checks, defaults, nullability, auto-wiring) to Parameters
         try {
             /** @var array<string,mixed> $resolved */
-            $resolved = Parameters::resolveParameters($constructorParameters, $arguments, $this, true);
-            return $resolved;
+            return Parameters::resolveParameters($constructorParameters, $arguments, $this, true);
         } catch (UnresolvableParameterException $e) {
             // Rethrow with the exact Container error formatting
             throw new UnresolvableParameterException(
-                "Unable to create object `$id`, missing parameter: `{$e->getParameterName()}`"
+                "Unable to create object `{$id}`, missing parameter: `{$e->getParameterName()}`",
             );
         } catch (CircularReferenceException $e) {
             // Rethrow circular reference exceptions as-is
             throw $e;
         } catch (\Throwable $e) {
             $type = $e::class;
-            throw new ContainerException(
-                "Unable to create object `$id`, threw exception: `{$type}`",
-                0,
-                $e
-            );
+            throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
         }
     }
 
@@ -188,7 +182,7 @@ class Container implements ContainerInterface
     {
         // If has($id) returns false, get($id) MUST throw a NotFoundExceptionInterface.
         if ($this->has($id) === false) {
-            throw new ReferenceNotFoundException("`$id` is not set");
+            throw new ReferenceNotFoundException("`{$id}` is not set");
         }
         // Avoid issues when resolving the container
         if ($id === self::class) {

@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace Kaly\Di;
 
-use ReflectionParameter;
-use ReflectionUnionType;
+use InvalidArgumentException;
+use Psr\Container\ContainerInterface;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
+use ReflectionParameter;
 use ReflectionType;
-use Psr\Container\ContainerInterface;
-use InvalidArgumentException;
+use ReflectionUnionType;
 
 /**
  * Helper class to deal with parameters resolution.
@@ -132,7 +132,7 @@ final class Parameters
         array $parameters,
         array $arguments,
         ?ContainerInterface $container = null,
-        bool $throwOnMissing = false
+        bool $throwOnMissing = false,
     ): array {
         // If we have an int indexed array, arguments are positional
         // Use named keys if no arguments are provided
@@ -152,20 +152,18 @@ final class Parameters
                 if (array_key_exists($paramName, $arguments)) {
                     $providedVariadic = $arguments[$paramName];
                     if (!is_array($providedVariadic)) {
-                        throw new InvalidArgumentException(
-                            sprintf(
-                                "Variadic argument for parameter $%s must be an array when passed by name, got %s.",
-                                $paramName,
-                                get_debug_type($providedVariadic)
-                            )
-                        );
+                        throw new InvalidArgumentException(sprintf(
+                            'Variadic argument for parameter $%s must be an array when passed by name, got %s.',
+                            $paramName,
+                            get_debug_type($providedVariadic),
+                        ));
                     }
                     // Type check elements if variadic has a type hint (e.g., string ...$names)
                     if ($paramType instanceof ReflectionNamedType) {
                         foreach ($providedVariadic as $variadicArg) {
                             assert(
                                 self::valueMatchType($variadicArg, $paramType),
-                                "parameter `$paramName` doesn't support " . get_debug_type($variadicArg)
+                                "parameter `{$paramName}` doesn't support " . get_debug_type($variadicArg),
                             );
                         }
                     }
@@ -179,7 +177,6 @@ final class Parameters
                 break;
             }
 
-
             // Check if argument is already provided, including null values
             $argumentKey = $isPositional ? $count : $paramName;
             $isProvided = array_key_exists($argumentKey, $arguments);
@@ -190,7 +187,7 @@ final class Parameters
                 // Provided argument doesn't match type
                 assert(
                     self::valueMatchType($providedArgument, $paramType),
-                    "parameter `$paramName` doesn't support " . get_debug_type($providedArgument)
+                    "parameter `{$paramName}` doesn't support " . get_debug_type($providedArgument),
                 );
 
                 $resolvedArguments[$argumentKey] = $providedArgument;
@@ -202,6 +199,7 @@ final class Parameters
                     if ($throwOnMissing) {
                         throw $e;
                     }
+
                     // Simply ignore, this will trigger an ArgumentCount error
                 }
             }
@@ -210,8 +208,10 @@ final class Parameters
         return $resolvedArguments;
     }
 
-    private static function resolveSingleParameter(ReflectionParameter $parameter, ?ContainerInterface $container): mixed
-    {
+    private static function resolveSingleParameter(
+        ReflectionParameter $parameter,
+        ?ContainerInterface $container,
+    ): mixed {
         // Resolve using the container for any valid type
         $types = self::getParameterTypes($parameter);
         foreach ($types as $type) {
@@ -238,14 +238,14 @@ final class Parameters
 
         throw new UnresolvableParameterException(
             sprintf(
-                "Cannot resolve required parameter #%d ($%s) of type %s.",
+                'Cannot resolve required parameter #%d ($%s) of type %s.',
                 $parameter->getPosition(),
                 $parameter->getName(),
-                self::reflectionTypeToString($parameter->getType())
+                self::reflectionTypeToString($parameter->getType()),
             ),
             0,
             null,
-            $parameter->getName()
+            $parameter->getName(),
         );
     }
 

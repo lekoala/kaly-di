@@ -11,8 +11,12 @@ final class UnresolvableParameterException extends Exception implements Containe
 {
     private ?string $parameterName = null;
 
-    public function __construct(string $message = "", int $code = 0, ?\Throwable $previous = null, ?string $parameterName = null)
-    {
+    public function __construct(
+        string $message = '',
+        int $code = 0,
+        ?\Throwable $previous = null,
+        ?string $parameterName = null,
+    ) {
         parent::__construct($message, $code, $previous);
         $this->parameterName = $parameterName;
     }

@@ -52,9 +52,8 @@ final class RuntimeCache
             self::$reflection[$class] = [$refl, $params];
         }
 
-        /** @var array{ReflectionClass<T>, ReflectionParameter[]} $result */
-        $result = self::$reflection[$class];
-        return $result;
+        /** @var array{ReflectionClass<T>, ReflectionParameter[]} */
+        return self::$reflection[$class];
     }
 
     /**

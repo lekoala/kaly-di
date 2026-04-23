@@ -21,7 +21,7 @@ final class ResolverRegistry
      * Resolve arguments based on custom conditions
      * @var array<class-string,array<string,callable|string>>
      */
-    protected array $resolvers = [];
+    private array $resolvers = [];
 
     /**
      * Define how to map constructor arguments when building objects of a given class
@@ -84,7 +84,7 @@ final class ResolverRegistry
                 continue;
             }
 
-            $keyStr = (string)$key;
+            $keyStr = (string) $key;
             if (RuntimeCache::typeExists($keyStr) && is_a($class, $keyStr, true)) {
                 $serviceName = $value instanceof Closure ? $value($name, $class) : $value;
                 assert(is_string($serviceName));

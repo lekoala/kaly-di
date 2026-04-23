@@ -26,29 +26,29 @@ final class Definitions
      * If the object is a Closure, it is executed as a factory method (see expand)
      * @var array<string,class-string|object|null>
      */
-    protected array $values = [];
+    private array $values = [];
 
     /**
      * Defines callbacks to be called after an object is instantiated
      * @var array<string,array<string,callable>>
      */
-    protected array $callbacks = [];
+    private array $callbacks = [];
 
     /**
      * Defines parameters passed to a given id
      * @var array<string,array<string,mixed>>
      */
-    protected array $parameters = [];
+    private array $parameters = [];
 
     /**
      * Resolve arguments based on custom conditions
      */
-    protected readonly ResolverRegistry $resolverRegistry;
+    private readonly ResolverRegistry $resolverRegistry;
 
     /**
      * Lock status
      */
-    protected bool $locked = false;
+    private bool $locked = false;
 
     /**
      * You can create the definitions with a basic array that map interfaces/ids to a class name or a closure
@@ -216,9 +216,9 @@ final class Definitions
     public function set(string $id, string|object|null $value = null): self
     {
         assert(!$this->locked);
-        assert(is_null($value) || is_object($value) || class_exists($value), "Value for `$id` is not valid");
+        assert(is_null($value) || is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
         // Avoid resolving stdClass with the DI container
-        assert($id !== stdClass::class, "Cannot set stdClass as id");
+        assert($id !== stdClass::class, 'Cannot set stdClass as id');
         $this->values[$id] = $value;
         return $this;
     }
@@ -230,7 +230,7 @@ final class Definitions
      * @param class-string|object|null $value
      * @return self
      */
-    protected function setDefault(string $id, string|object|null $value = null): self
+    private function setDefault(string $id, string|object|null $value = null): self
     {
         if ($this->has($id)) {
             return $this;
@@ -281,15 +281,15 @@ final class Definitions
     public function bind(string $class, ?string $interface = null, array $parameters = []): self
     {
         assert(!$this->locked);
-        assert(class_exists($class), "Class `$class` does not exist");
+        assert(class_exists($class), "Class `{$class}` does not exist");
 
         // If no interface is provided, binds to a single interface
         if ($interface === null) {
             $interfaces = RuntimeCache::classHierarchy($class)['interfaces'];
-            assert(count($interfaces) === 1, "Class `$class` implements multiple interfaces");
-            $interface = (string)current($interfaces);
+            assert(count($interfaces) === 1, "Class `{$class}` implements multiple interfaces");
+            $interface = (string) current($interfaces);
         }
-        assert(interface_exists($interface), "Interface `$interface` does not exist");
+        assert(interface_exists($interface), "Interface `{$interface}` does not exist");
         if (!empty($parameters)) {
             $this->parameters($class, ...$parameters);
         }
@@ -384,7 +384,7 @@ final class Definitions
         assert(!$this->locked);
         foreach ($params as $k => $v) {
             // casting only necessary due to mixed
-            $this->parameter($id, (string)$k, $v);
+            $this->parameter($id, (string) $k, $v);
         }
         return $this;
     }
@@ -429,7 +429,7 @@ final class Definitions
 
         // If no name is provided, simply increment
         if ($name === null) {
-            $name = (string)count($this->callbacksFor($id));
+            $name = (string) count($this->callbacksFor($id));
         }
         $this->callbacks[$id][$name] = $fn;
         return $this;

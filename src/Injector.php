@@ -19,7 +19,7 @@ use ReflectionFunction;
  */
 final class Injector
 {
-    protected readonly ?ContainerInterface $container;
+    private readonly ?ContainerInterface $container;
 
     public function __construct(?ContainerInterface $container = null)
     {
@@ -61,22 +61,19 @@ final class Injector
         // If we try to instantiate an interface, we need the container to map it to a class
         if ($reflection->isInterface()) {
             if (!$this->container) {
-                throw new InvalidArgumentException("Cannot instantiate an interface without a container");
+                throw new InvalidArgumentException('Cannot instantiate an interface without a container');
             }
             // Resolve to the concrete class via the container, then build a fresh instance
             $resolved = $this->container->get($class);
             assert(is_object($resolved));
-            /** @var T $instance */
-            $instance = $this->make($resolved::class, ...$arguments);
-            return $instance;
+            /** @var T */
+            return $this->make($resolved::class, ...$arguments);
         }
 
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
         $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
 
-        /** @var T $instance */
-        $instance = $reflection->newInstanceArgs($flatArguments);
-
-        return $instance;
+        /** @var T */
+        return $reflection->newInstanceArgs($flatArguments);
     }
 }

@@ -21,6 +21,9 @@ final class Injector
 {
     private readonly ?ContainerInterface $container;
 
+    /** @var array<int, array{0: ReflectionFunction, 1: array<\ReflectionParameter>}> */
+    private array $callableCache = [];
+
     public function __construct(?ContainerInterface $container = null)
     {
         $this->container = $container;
@@ -36,9 +39,21 @@ final class Injector
      */
     public function invoke(callable $callable, ...$arguments)
     {
-        $closure = Closure::fromCallable($callable);
-        $reflection = new ReflectionFunction($closure);
-        $parameters = $reflection->getParameters();
+        if ($callable instanceof Closure) {
+            $closure = $callable;
+            $id = spl_object_id($closure);
+
+            if (!isset($this->callableCache[$id])) {
+                $reflection = new ReflectionFunction($closure);
+                $this->callableCache[$id] = [$reflection, $reflection->getParameters()];
+            }
+
+            [$reflection, $parameters] = $this->callableCache[$id];
+        } else {
+            $closure = Closure::fromCallable($callable);
+            $reflection = new ReflectionFunction($closure);
+            $parameters = $reflection->getParameters();
+        }
 
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
         $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);

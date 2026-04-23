@@ -273,9 +273,7 @@ final class Parameters
             $pos = $parameter->getPosition();
             if (array_key_exists($name, $resolvedArguments)) {
                 if ($parameter->isVariadic() && is_array($resolvedArguments[$name])) {
-                    foreach ($resolvedArguments[$name] as $v) {
-                        $flat[] = $v;
-                    }
+                    array_push($flat, ...$resolvedArguments[$name]);
                 } else {
                     $flat[] = $resolvedArguments[$name];
                 }

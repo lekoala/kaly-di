@@ -74,7 +74,7 @@ class Container implements ContainerInterface
 
         // Use try/finally pattern to make sure we unset building[$id] when throwing exceptions
         try {
-            if (isset($this->building[$class])) {
+            if (array_key_exists($class, $this->building)) {
                 $buildChain = implode(', ', array_keys($this->building));
                 throw new CircularReferenceException("Circular reference to `{$class}` in `{$buildChain}`");
             }
@@ -137,23 +137,24 @@ class Container implements ContainerInterface
 
             $types = Parameters::getParameterTypes($parameter);
             foreach ($types as $type) {
-                if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-                    $typeName = $type->getName();
-                    assert(RuntimeCache::typeExists($typeName));
-                    /** @var class-string $typeName */
-                    $serviceName = $definitions->resolveName($name, $typeName, $class);
+                if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
+                    continue;
+                }
+                $typeName = $type->getName();
+                assert(RuntimeCache::typeExists($typeName));
+                /** @var class-string $typeName */
+                $serviceName = $definitions->resolveName($name, $typeName, $class);
 
-                    if ($serviceName && $definitions->has($serviceName)) {
-                        $arguments[$name] = $this->get($serviceName);
-                        break;
-                    }
+                if ($serviceName && $definitions->has($serviceName)) {
+                    $arguments[$name] = $this->get($serviceName);
+                    break;
                 }
             }
         }
 
         // 3. Delegate final resolution (type-checks, defaults, nullability, auto-wiring) to Parameters
         try {
-            /** @var array<string,mixed> $resolved */
+            /** @var array<string,mixed> */
             return Parameters::resolveParameters($constructorParameters, $arguments, $this, true);
         } catch (UnresolvableParameterException $e) {
             // Rethrow with the exact Container error formatting
@@ -193,7 +194,7 @@ class Container implements ContainerInterface
             return new Injector($this);
         }
         // Return cached instance
-        if (isset($this->instances[$id])) {
+        if (array_key_exists($id, $this->instances)) {
             return $this->instances[$id];
         }
 

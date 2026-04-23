@@ -66,7 +66,7 @@ final class ResolverRegistry
     public function resolveName(string $name, string $typeName, string $class): ?string
     {
         $resolvers = $this->resolversFor($typeName);
-        if (empty($resolvers)) {
+        if ($resolvers === []) {
             return null;
         }
 

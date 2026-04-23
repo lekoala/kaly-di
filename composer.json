@@ -14,7 +14,7 @@
         "psr/container": "^1.1.2|^2.0.2"
     },
     "require-dev": {
-        "carthage-software/mago": "1.10.0",
+        "carthage-software/mago": "1.24.0",
         "composer/ca-bundle": "^1.5",
         "phpstan/phpstan": "^2",
         "phpunit/phpunit": "^11",
@@ -45,7 +45,9 @@
         "phpcs": "phpcs",
         "phpstan": "phpstan analyse src --memory-limit=-1",
         "rector-dry": "rector --dry-run",
-        "rector": "rector"
+        "rector": "rector",
+        "mago:fmt": "mago fmt",
+        "mago:lint": "mago lint --minimum-report-level warning src"
     },
     "minimum-stability": "dev",
     "prefer-stable": true

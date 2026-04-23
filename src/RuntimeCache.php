@@ -45,7 +45,7 @@ final class RuntimeCache
      */
     public static function reflection(string $class): array
     {
-        if (!isset(self::$reflection[$class])) {
+        if (!array_key_exists($class, self::$reflection)) {
             $refl = new ReflectionClass($class);
             $constructor = $refl->getConstructor();
             $params = $constructor ? $constructor->getParameters() : [];
@@ -64,10 +64,12 @@ final class RuntimeCache
      */
     public static function classHierarchy(string $class): array
     {
-        if (!isset(self::$hierarchy[$class])) {
-            $interfaces = class_implements($class) ?: [];
+        if (!array_key_exists($class, self::$hierarchy)) {
+            $interfacesRaw = class_implements($class);
+            $interfaces = is_array($interfacesRaw) ? $interfacesRaw : [];
             ksort($interfaces); // deterministic order
-            $parents = class_parents($class) ?: [];
+            $parentsRaw = class_parents($class);
+            $parents = is_array($parentsRaw) ? $parentsRaw : [];
             self::$hierarchy[$class] = ['interfaces' => array_values($interfaces), 'parents' => array_values($parents)];
         }
 
@@ -79,7 +81,7 @@ final class RuntimeCache
      */
     public static function classExists(string $class): bool
     {
-        if (!isset(self::$classes[$class])) {
+        if (!array_key_exists($class, self::$classes)) {
             self::$classes[$class] = class_exists($class);
         }
 
@@ -91,7 +93,7 @@ final class RuntimeCache
      */
     public static function typeExists(string $type): bool
     {
-        if (!isset(self::$types[$type])) {
+        if (!array_key_exists($type, self::$types)) {
             self::$types[$type] = class_exists($type) || interface_exists($type);
         }
 

@@ -215,14 +215,16 @@ final class Parameters
         // Resolve using the container for any valid type
         $types = self::getParameterTypes($parameter);
         foreach ($types as $type) {
-            if ($type instanceof ReflectionNamedType) {
-                if (!$type->isBuiltin()) {
-                    // The container must use the class or interface name as id
-                    $name = $type->getName();
-                    if ($container && $container->has($name)) {
-                        return $container->get($name);
-                    }
-                }
+            if (!$type instanceof ReflectionNamedType) {
+                continue;
+            }
+            if ($type->isBuiltin()) {
+                continue;
+            }
+            // The container must use the class or interface name as id
+            $name = $type->getName();
+            if ($container && $container->has($name)) {
+                return $container->get($name);
             }
         }
 

@@ -62,11 +62,11 @@ final class Definitions
             return;
         }
         // Passing an array is like a call to set with key, value
-        if (is_array($definitions)) {
-            $this->setAll($definitions);
-        } else {
+        if (!is_array($definitions)) {
             $this->merge($definitions);
+            return;
         }
+        $this->setAll($definitions);
     }
 
     /**
@@ -84,7 +84,7 @@ final class Definitions
         $this->values = [...$this->values, ...$definitions->getValues()];
 
         foreach ($definitions->getCallbacks() as $key => $values) {
-            if (isset($this->callbacks[$key])) {
+            if (array_key_exists($key, $this->callbacks)) {
                 $this->callbacks[$key] = [...$this->callbacks[$key], ...$values];
             } else {
                 $this->callbacks[$key] = $values;
@@ -92,7 +92,7 @@ final class Definitions
         }
 
         foreach ($definitions->getParameters() as $key => $values) {
-            if (isset($this->parameters[$key])) {
+            if (array_key_exists($key, $this->parameters)) {
                 $this->parameters[$key] = [...$this->parameters[$key], ...$values];
             } else {
                 $this->parameters[$key] = $values;
@@ -101,7 +101,7 @@ final class Definitions
 
         $resolvers = $this->resolverRegistry->getResolvers();
         foreach ($definitions->getResolvers() as $key => $values) {
-            if (isset($resolvers[$key])) {
+            if (array_key_exists($key, $resolvers)) {
                 $resolvers[$key] = [...$resolvers[$key], ...$values];
             } else {
                 $resolvers[$key] = $values;
@@ -290,7 +290,7 @@ final class Definitions
             $interface = (string) current($interfaces);
         }
         assert(interface_exists($interface), "Interface `{$interface}` does not exist");
-        if (!empty($parameters)) {
+        if ($parameters !== []) {
             $this->parameters($class, ...$parameters);
         }
         return $this->set($interface, $class);

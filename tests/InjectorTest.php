@@ -161,4 +161,23 @@ class InjectorTest extends TestCase
         $injector->invoke(function (...$names) {
         }, names: 'not-an-array');
     }
+
+    public function testClosureCaching(): void
+    {
+        $injector = new Injector();
+
+        $f1 = function (int $a) {
+            return $a;
+        };
+        $f2 = function (string $b) {
+            return $b;
+        };
+
+        $this->assertEquals(1, $injector->invoke($f1, a: 1));
+        $this->assertEquals('test', $injector->invoke($f2, b: 'test'));
+
+        // Re-invoke to ensure cache doesn't break things
+        $this->assertEquals(2, $injector->invoke($f1, a: 2));
+        $this->assertEquals('other', $injector->invoke($f2, b: 'other'));
+    }
 }

@@ -19,8 +19,11 @@ integrations = ["phpunit"]
 [linter.rules]
 ambiguous-function-call = { enabled = false }
 literal-named-argument = { enabled = false }
-halstead = { effort-threshold = 7000 }
 assert-description = { enabled = false }
+cyclomatic-complexity = { threshold = 40 }
+kan-defect = { threshold = 4 }
+too-many-methods = { threshold = 30 }
+halstead = { effort-threshold = 7000, difficulty-threshold = 20 }
 
 [analyzer]
 plugins = []

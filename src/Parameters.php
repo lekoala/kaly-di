@@ -122,7 +122,6 @@ final class Parameters
      * @param \ReflectionParameter[] $parameters
      * @param array<mixed> $arguments
      * @param ContainerInterface|null $container
-     * @param bool $throwOnMissing Whether to throw UnresolvableParameterException if a parameter cannot be resolved
      * @return array<mixed>
      * @throws UnresolvableParameterException
      * @throws InvalidArgumentException
@@ -132,7 +131,42 @@ final class Parameters
         array $parameters,
         array $arguments,
         ?ContainerInterface $container = null,
-        bool $throwOnMissing = false,
+    ): array {
+        return self::doResolveParameters($parameters, $arguments, $container, ResolutionMode::Lenient);
+    }
+
+    /**
+     * @param \ReflectionParameter[] $parameters
+     * @param array<mixed> $arguments
+     * @param ContainerInterface|null $container
+     * @return array<mixed>
+     * @throws UnresolvableParameterException
+     * @throws InvalidArgumentException
+     * @throws CircularReferenceException When the container resolves a parameter that has circular dependencies
+     */
+    public static function resolveParametersOrThrow(
+        array $parameters,
+        array $arguments,
+        ?ContainerInterface $container = null,
+    ): array {
+        return self::doResolveParameters($parameters, $arguments, $container, ResolutionMode::Strict);
+    }
+
+    /**
+     * @param \ReflectionParameter[] $parameters
+     * @param array<mixed> $arguments
+     * @param ContainerInterface|null $container
+     * @param ResolutionMode $mode Whether to throw on missing parameters
+     * @return array<mixed>
+     * @throws UnresolvableParameterException
+     * @throws InvalidArgumentException
+     * @throws CircularReferenceException When the container resolves a parameter that has circular dependencies
+     */
+    private static function doResolveParameters(
+        array $parameters,
+        array $arguments,
+        ?ContainerInterface $container,
+        ResolutionMode $mode,
     ): array {
         // If we have an int indexed array, arguments are positional
         // Use named keys if no arguments are provided
@@ -148,30 +182,31 @@ final class Parameters
 
             // Last argument is variadic
             if ($parameter->isVariadic()) {
-                // Handle named variadic argument (expecting an array)
-                if (array_key_exists($paramName, $arguments)) {
-                    $providedVariadic = $arguments[$paramName];
-                    if (!is_array($providedVariadic)) {
-                        throw new InvalidArgumentException(sprintf(
-                            'Variadic argument for parameter $%s must be an array when passed by name, got %s.',
-                            $paramName,
-                            get_debug_type($providedVariadic),
-                        ));
-                    }
-                    // Type check elements if variadic has a type hint (e.g., string ...$names)
-                    if ($paramType instanceof ReflectionNamedType) {
-                        foreach ($providedVariadic as $variadicArg) {
-                            assert(
-                                self::valueMatchType($variadicArg, $paramType),
-                                "parameter `{$paramName}` doesn't support " . get_debug_type($variadicArg),
-                            );
-                        }
-                    }
-                    $resolvedArguments[$paramName] = $providedVariadic;
-                } else {
+                if (!array_key_exists($paramName, $arguments)) {
                     // Merge remaining arguments
                     $resolvedArguments = [...$resolvedArguments, ...array_slice($arguments, $count)];
+                    break;
                 }
+
+                // Handle named variadic argument (expecting an array)
+                $providedVariadic = $arguments[$paramName];
+                if (!is_array($providedVariadic)) {
+                    throw new InvalidArgumentException(sprintf(
+                        'Variadic argument for parameter $%s must be an array when passed by name, got %s.',
+                        $paramName,
+                        get_debug_type($providedVariadic),
+                    ));
+                }
+                // Type check elements if variadic has a type hint (e.g., string ...$names)
+                if ($paramType instanceof ReflectionNamedType) {
+                    foreach ($providedVariadic as $variadicArg) {
+                        assert(
+                            self::valueMatchType($variadicArg, $paramType),
+                            "parameter `{$paramName}` doesn't support " . get_debug_type($variadicArg),
+                        );
+                    }
+                }
+                $resolvedArguments[$paramName] = $providedVariadic;
 
                 // Variadic is always the last parameter
                 break;
@@ -191,17 +226,18 @@ final class Parameters
                 );
 
                 $resolvedArguments[$argumentKey] = $providedArgument;
-            } else {
-                try {
-                    $resolvedArgument = self::resolveSingleParameter($parameter, $container);
-                    $resolvedArguments[$argumentKey] = $resolvedArgument;
-                } catch (UnresolvableParameterException $e) {
-                    if ($throwOnMissing) {
-                        throw $e;
-                    }
+                continue;
+            }
 
-                    // Simply ignore, this will trigger an ArgumentCount error
+            try {
+                $resolvedArgument = self::resolveSingleParameter($parameter, $container);
+                $resolvedArguments[$argumentKey] = $resolvedArgument;
+            } catch (UnresolvableParameterException $e) {
+                if ($mode === ResolutionMode::Strict) {
+                    throw $e;
                 }
+
+                // Simply ignore, this will trigger an ArgumentCount error
             }
         }
 
@@ -271,22 +307,29 @@ final class Parameters
         foreach ($parameters as $parameter) {
             $name = $parameter->getName();
             $pos = $parameter->getPosition();
+
             if (array_key_exists($name, $resolvedArguments)) {
-                if ($parameter->isVariadic() && is_array($resolvedArguments[$name])) {
-                    array_push($flat, ...$resolvedArguments[$name]);
-                } else {
+                if (!$parameter->isVariadic() || !is_array($resolvedArguments[$name])) {
                     $flat[] = $resolvedArguments[$name];
+                    continue;
                 }
-            } elseif (array_key_exists($pos, $resolvedArguments)) {
-                if ($parameter->isVariadic()) {
-                    // Positional variadic arguments are merged into $resolvedArguments
-                    for ($i = $pos; array_key_exists($i, $resolvedArguments); $i++) {
-                        $flat[] = $resolvedArguments[$i];
-                    }
-                } else {
-                    $flat[] = $resolvedArguments[$pos];
-                }
+                array_push($flat, ...$resolvedArguments[$name]);
+                continue;
             }
+
+            if (!array_key_exists($pos, $resolvedArguments)) {
+                continue;
+            }
+
+            if ($parameter->isVariadic()) {
+                // Positional variadic arguments are merged into $resolvedArguments
+                for ($i = $pos; array_key_exists($i, $resolvedArguments); $i++) {
+                    $flat[] = $resolvedArguments[$i];
+                }
+                continue;
+            }
+
+            $flat[] = $resolvedArguments[$pos];
         }
         return $flat;
     }

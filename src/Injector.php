@@ -40,24 +40,44 @@ final class Injector
     public function invoke(callable $callable, ...$arguments)
     {
         if ($callable instanceof Closure) {
-            $closure = $callable;
-            $id = spl_object_id($closure);
-
-            if (!isset($this->callableCache[$id])) {
-                $reflection = new ReflectionFunction($closure);
-                $this->callableCache[$id] = [$reflection, $reflection->getParameters()];
-            }
-
-            [$reflection, $parameters] = $this->callableCache[$id];
-        } else {
-            $closure = Closure::fromCallable($callable);
-            $reflection = new ReflectionFunction($closure);
-            $parameters = $reflection->getParameters();
+            return $this->invokeClosure($callable, $arguments);
         }
+        return $this->invokeCallable($callable, $arguments);
+    }
 
+    /**
+     * @param array<mixed> $arguments
+     */
+    private function invokeClosure(Closure $closure, array $arguments): mixed
+    {
+        $id = spl_object_id($closure);
+        if (!array_key_exists($id, $this->callableCache)) {
+            $reflection = new ReflectionFunction($closure);
+            $this->callableCache[$id] = [$reflection, $reflection->getParameters()];
+        }
+        [$reflection, $parameters] = $this->callableCache[$id];
+        return $this->invokeResolved($reflection, $parameters, $arguments);
+    }
+
+    /**
+     * @param array<mixed> $arguments
+     */
+    private function invokeCallable(callable $callable, array $arguments): mixed
+    {
+        $closure = Closure::fromCallable($callable);
+        $reflection = new ReflectionFunction($closure);
+        $parameters = $reflection->getParameters();
+        return $this->invokeResolved($reflection, $parameters, $arguments);
+    }
+
+    /**
+     * @param array<\ReflectionParameter> $parameters
+     * @param array<mixed> $arguments
+     */
+    private function invokeResolved(ReflectionFunction $reflection, array $parameters, array $arguments): mixed
+    {
         $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
         $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
-
         return $reflection->invoke(...$flatArguments);
     }
 

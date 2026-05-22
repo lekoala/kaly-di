@@ -122,9 +122,9 @@ class Container implements ContainerInterface
         foreach ($definedParameters as $paramName => $paramValue) {
             if ($paramValue instanceof Closure) {
                 $arguments[$paramName] = $paramValue($this);
-            } else {
-                $arguments[$paramName] = $paramValue;
+                continue;
             }
+            $arguments[$paramName] = $paramValue;
         }
 
         // 2. Check Resolvers for any missing arguments that map to services
@@ -155,7 +155,7 @@ class Container implements ContainerInterface
         // 3. Delegate final resolution (type-checks, defaults, nullability, auto-wiring) to Parameters
         try {
             /** @var array<string,mixed> */
-            return Parameters::resolveParameters($constructorParameters, $arguments, $this, true);
+            return Parameters::resolveParametersOrThrow($constructorParameters, $arguments, $this);
         } catch (UnresolvableParameterException $e) {
             // Rethrow with the exact Container error formatting
             throw new UnresolvableParameterException(

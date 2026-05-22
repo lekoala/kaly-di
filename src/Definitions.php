@@ -84,28 +84,28 @@ final class Definitions
         $this->values = [...$this->values, ...$definitions->getValues()];
 
         foreach ($definitions->getCallbacks() as $key => $values) {
-            if (array_key_exists($key, $this->callbacks)) {
-                $this->callbacks[$key] = [...$this->callbacks[$key], ...$values];
-            } else {
+            if (!array_key_exists($key, $this->callbacks)) {
                 $this->callbacks[$key] = $values;
+                continue;
             }
+            $this->callbacks[$key] = [...$this->callbacks[$key], ...$values];
         }
 
         foreach ($definitions->getParameters() as $key => $values) {
-            if (array_key_exists($key, $this->parameters)) {
-                $this->parameters[$key] = [...$this->parameters[$key], ...$values];
-            } else {
+            if (!array_key_exists($key, $this->parameters)) {
                 $this->parameters[$key] = $values;
+                continue;
             }
+            $this->parameters[$key] = [...$this->parameters[$key], ...$values];
         }
 
         $resolvers = $this->resolverRegistry->getResolvers();
         foreach ($definitions->getResolvers() as $key => $values) {
-            if (array_key_exists($key, $resolvers)) {
-                $resolvers[$key] = [...$resolvers[$key], ...$values];
-            } else {
+            if (!array_key_exists($key, $resolvers)) {
                 $resolvers[$key] = $values;
+                continue;
             }
+            $resolvers[$key] = [...$resolvers[$key], ...$values];
         }
         $this->resolverRegistry->setResolvers($resolvers);
     }

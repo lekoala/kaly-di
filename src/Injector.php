@@ -8,6 +8,7 @@ use Closure;
 use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
 use ReflectionFunction;
+use WeakMap;
 
 /**
  * Invoke callables or create fresh objects with automatic dependency resolution
@@ -21,12 +22,13 @@ final class Injector
 {
     private readonly ?ContainerInterface $container;
 
-    /** @var array<int, array{0: ReflectionFunction, 1: array<\ReflectionParameter>}> */
-    private array $callableCache = [];
+    /** @var WeakMap<Closure, array{0: ReflectionFunction, 1: array<\ReflectionParameter>}> */
+    private WeakMap $callableCache;
 
     public function __construct(?ContainerInterface $container = null)
     {
         $this->container = $container;
+        $this->callableCache = new WeakMap();
     }
 
     /**
@@ -50,12 +52,11 @@ final class Injector
      */
     private function invokeClosure(Closure $closure, array $arguments): mixed
     {
-        $id = spl_object_id($closure);
-        if (!array_key_exists($id, $this->callableCache)) {
+        if (!$this->callableCache->offsetExists($closure)) {
             $reflection = new ReflectionFunction($closure);
-            $this->callableCache[$id] = [$reflection, $reflection->getParameters()];
+            $this->callableCache[$closure] = [$reflection, $reflection->getParameters()];
         }
-        [$reflection, $parameters] = $this->callableCache[$id];
+        [$reflection, $parameters] = $this->callableCache[$closure];
         return $this->invokeResolved($reflection, $parameters, $arguments);
     }
 

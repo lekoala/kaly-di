@@ -23,4 +23,9 @@
     <!-- Paths to check -->
     <file>src</file>
     <file>tests</file>
+
+    <!-- Test fixtures often define multiple classes/interfaces per file -->
+    <rule ref="PSR1.Classes.ClassDeclaration.MultipleClasses">
+        <exclude-pattern>tests/*</exclude-pattern>
+    </rule>
 </ruleset>

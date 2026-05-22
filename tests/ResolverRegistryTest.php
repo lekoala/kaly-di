@@ -63,7 +63,33 @@ class ResolverRegistryTest extends TestCase
         $this->assertNull($result);
     }
 
-    public function testSortResolvers()
+    public function testGetResolvers(): void
+    {
+        $registry = new ResolverRegistry();
+        $registry->resolve(TestObject::class, 'a', '1');
+        $registry->resolve(TestInterface::class, 'b', '2');
+
+        $resolvers = $registry->getResolvers();
+        $this->assertArrayHasKey(TestObject::class, $resolvers);
+        $this->assertArrayHasKey(TestInterface::class, $resolvers);
+        $this->assertSame('1', $resolvers[TestObject::class]['a']);
+        $this->assertSame('2', $resolvers[TestInterface::class]['b']);
+    }
+
+    public function testSetResolvers(): void
+    {
+        $registry = new ResolverRegistry();
+        $registry->resolve(TestObject::class, 'a', '1');
+
+        $registry->setResolvers([
+            TestInterface::class => ['x' => '10'],
+        ]);
+
+        $this->assertSame(['x' => '10'], $registry->resolversFor(TestInterface::class));
+        $this->assertEmpty($registry->resolversFor(TestObject::class));
+    }
+
+    public function testSortResolvers(): void
     {
         $registry = new ResolverRegistry();
         $registry->resolve(TestObject::class, 'a', '1');

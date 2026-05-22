@@ -8,11 +8,21 @@ use Kaly\Di\RuntimeCache;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
-interface RuntimeCacheTestInterface1 {}
-interface RuntimeCacheTestInterface2 {}
-class RuntimeCacheTestGrandparent {}
-class RuntimeCacheTestParent extends RuntimeCacheTestGrandparent {}
-class RuntimeCacheTestChild extends RuntimeCacheTestParent implements RuntimeCacheTestInterface1, RuntimeCacheTestInterface2 {}
+interface RuntimeCacheTestInterface1
+{
+}
+interface RuntimeCacheTestInterface2
+{
+}
+class RuntimeCacheTestGrandparent
+{
+}
+class RuntimeCacheTestParent extends RuntimeCacheTestGrandparent
+{
+}
+class RuntimeCacheTestChild extends RuntimeCacheTestParent implements RuntimeCacheTestInterface1, RuntimeCacheTestInterface2
+{
+}
 
 class RuntimeCacheTest extends TestCase
 {

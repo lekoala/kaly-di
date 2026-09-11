@@ -38,7 +38,7 @@
             "@mago:lint",
             "@mago:format"
         ],
-        "phpunit": "phpunit",
+        "phpunit": "@php -d zend.assertions=1 vendor/bin/phpunit",
         "phpstan": "phpstan analyse src --memory-limit=-1",
         "mago:lint": "mago lint --minimum-report-level warning src tests",
         "mago:format": "mago fmt --check",

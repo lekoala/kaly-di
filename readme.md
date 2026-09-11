@@ -1,6 +1,6 @@
 # Kaly DI
 
-[![Latest Stable Version](http://poser.pugx.org/lekoala/kaly-di/v)](https://packagist.org/packages/lekoala/kaly-di) [![Total Downloads](http://poser.pugx.org/lekoala/kaly-di/downloads)](https://packagist.org/packages/lekoala/kaly-di) [![License](http://poser.pugx.org/lekoala/kaly-di/license)](https://packagist.org/packages/lekoala/kaly-di) [![PHP Version Require](http://poser.pugx.org/lekoala/kaly-di/require/php)](https://packagist.org/packages/lekoala/kaly-di)
+[![Latest Version](https://img.shields.io/packagist/v/lekoala/kaly-di)](https://packagist.org/packages/lekoala/kaly-di) [![Total Downloads](https://img.shields.io/packagist/dt/lekoala/kaly-di)](https://packagist.org/packages/lekoala/kaly-di) [![License](https://img.shields.io/packagist/l/lekoala/kaly-di)](https://packagist.org/packages/lekoala/kaly-di) [![PHP Version Require](https://img.shields.io/packagist/php-v/lekoala/kaly-di)](https://packagist.org/packages/lekoala/kaly-di)
 
 > Small PSR-11 autowiring container for PHP 8.3+
 

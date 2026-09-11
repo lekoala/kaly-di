@@ -2,18 +2,25 @@
 
 [![Latest Stable Version](http://poser.pugx.org/lekoala/kaly-di/v)](https://packagist.org/packages/lekoala/kaly-di) [![Total Downloads](http://poser.pugx.org/lekoala/kaly-di/downloads)](https://packagist.org/packages/lekoala/kaly-di) [![License](http://poser.pugx.org/lekoala/kaly-di/license)](https://packagist.org/packages/lekoala/kaly-di) [![PHP Version Require](http://poser.pugx.org/lekoala/kaly-di/require/php)](https://packagist.org/packages/lekoala/kaly-di)
 
-> Minimalist and Modern Dependency Injection Container for PHP 8.3+
+> Small PSR-11 autowiring container for PHP 8.3+
 
-Kaly DI is a lightweight, flexible, and PSR-11 compliant dependency injection (DI) container designed for modern PHP applications. It emphasizes simplicity, performance, and clear code without reliance on attributes or "magic."
+Kaly DI is a lightweight dependency injection container built around a strict
+separation of concerns:
+
+- **`Definitions`** — Kaly-specific configuration, used at the composition root.
+- **`Container`** — a PSR-11 container. At runtime, the only API is `get()`/`has()`.
+- **`Injector`** — an independent utility for building fresh instances and invoking callables.
+
+Application code never needs to depend on a proprietary container API.
 
 ## Key Features
 
-- **PSR-11 Compliance:** Seamlessly interoperable with PHP standards.
-- **No Attributes, No Magic:** Keep your code clean and decoupled from the container.
-- **Strongly Typed Definitions:** Define dependencies in PHP for full IDE support (autocompletion, refactoring).
-- **Advanced Auto-wiring:** Automatic dependency resolution, fine-tunable with resolvers.
-- **Performance Focused:** Minimal overhead, designed to be extremely fast.
-- **Developer Friendly:** Comprehensive error reporting and development-only assertions.
+- **PSR-11 Compliance:** interoperable with PHP standards.
+- **No Attributes, No Magic:** plain PHP configuration, no attributes or compilation.
+- **Strongly Typed Definitions:** define dependencies in PHP for full IDE support.
+- **Autowiring:** concrete classes are resolved automatically; bind interfaces when needed.
+- **Explicit Lifecycle:** `get()` returns shared services, `make()` instantiates classes.
+- **Developer Friendly:** typed error reporting and development-only assertions.
 
 ## Installation
 
@@ -26,30 +33,49 @@ composer require lekoala/kaly-di
 ```php
 use Kaly\Di\Container;
 use Kaly\Di\Definitions;
+use Kaly\Di\Injector;
 
-// 1. Define dependencies
+// 1. Configure the graph at the composition root
 $definitions = Definitions::create()
-    ->set(\PDO::class, new \PDO('sqlite::memory:'));
+    ->set(\PDO::class, fn () => new \PDO('sqlite::memory:'))
+    ->bind(LoggerInterface::class, FileLogger::class);
 
 // 2. Create the container
 $container = new Container($definitions);
 
-// 3. Get auto-wired instances
-$myObject = $container->get(MyClass::class);
+// 3. Resolve services (shared)
+$pdo = $container->get(\PDO::class);
+$logger = $container->get(LoggerInterface::class);
+
+// 4. Build fresh instances with the Injector
+$injector = new Injector($container);
+$fresh = $injector->make(MyService::class);
 ```
+
+## `get()` resolves services, `make()` instantiates classes
+
+```php
+$container->get(Foo::class);   // shared instance, configured by Definitions
+$injector->make(Foo::class);   // fresh concrete instance, independent of Definitions
+```
+
+- `Container::get()` resolves configured container entries (definitions, bindings, objects, factories). Entries are shared: two calls with the same id return the same object.
+- `Injector::make()` instantiates a concrete class independently of container definitions. It uses PSR-11 only to resolve the object dependencies of that class. An interface or abstract class cannot be built with `make()`.
 
 ## Documentation
 
 Detailed guides are available in the `docs/` directory:
 
-- [**Definitions**](./docs/definitions.md): Setting services, binding interfaces, parameters, and callbacks.
-- [**Resolvers**](./docs/resolvers.md): Managing complex auto-wiring and type conflicts.
-- [**Injector**](./docs/injector.md): Creating fresh instances and invoking callables.
-- [**Architecture**](./docs/architecture.md): Internal design, design decisions, and exceptions.
+- [**Definitions**](./docs/definitions.md): bindings, parameters, callbacks and merging.
+- [**Injector**](./docs/injector.md): building fresh instances and invoking callables.
+- [**Architecture**](./docs/architecture.md): design decisions and the PSR-11 boundary.
 
 ## A Note on Assertions
 
-Kaly DI uses PHP `assert()` for input validation (e.g., checking class existence, definition lock, type compatibility). This is **by design**: these checks run automatically in development (`zend.assertions = 1`) but are disabled in production (`zend.assertions = -1`) for zero overhead.
+Kaly DI uses PHP `assert()` for configuration validation (e.g., checking class
+existence, definition lock, type compatibility). This is **by design**: these checks
+run automatically in development (`zend.assertions = 1`) but are disabled in
+production (`zend.assertions = -1`) for zero overhead.
 
 Ensure your test suite covers your DI configuration to catch mistakes before deployment.
 

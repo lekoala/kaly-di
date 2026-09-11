@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kaly\Tests\Mocks;
 
 class TestObject5 implements TestAltInterface
@@ -8,6 +10,7 @@ class TestObject5 implements TestAltInterface
     public string $v2;
     public ?string $v3;
     public array $arr;
+
     public function __construct(string $v, string $v2, array $arr, ?string $v3 = null)
     {
         $this->v = $v;

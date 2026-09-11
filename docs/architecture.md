@@ -1,40 +1,76 @@
 # Architecture
 
-Kaly DI is designed with simplicity, performance, and PSR-11 compliance as core principles.
+Kaly DI is designed around three boundaries:
+
+```text
+Definitions ─────── Kaly-specific configuration, used at the composition root
+      │
+      ▼
+Container ───────── implements Psr\Container\ContainerInterface
+      │             public runtime API: get() / has()
+      │
+      ▼
+application ─────── depends only on ContainerInterface
+
+Injector ────────── standalone utility, depends only on ContainerInterface
+```
 
 ## Core Components
 
 The library is composed of five main classes:
 
-1. **`Container`**: The primary entry point. Implements `Psr\Container\ContainerInterface`. It manages shared object instances and orchestrates the building process.
-2. **`Definitions`**: A fluent builder for container configuration. It stores service mappings, parameters, and callbacks.
-3. **`ResolverRegistry`** *(internal)*: Internal component that manages complex auto-wiring rules.
-4. **`Parameters`**: A static helper using Reflection to analyze constructor signatures and match types with container entries.
-5. **`Injector`**: A utility for "on-demand" instantiation and invocation.
+1. **`Container`**: The primary runtime entry point. Implements `Psr\Container\ContainerInterface`. It manages shared instances and orchestrates the building process. Its only public methods are `get()` and `has()`.
+2. **`Definitions`**: A fluent builder for container configuration (bindings, parameters, callbacks). Used at the composition root.
+3. **`Parameters`** *(internal)*: A static helper using Reflection to analyze callables and match types with container entries.
+4. **`Injector`**: A standalone utility for creating fresh instances and invoking callables. It depends only on PSR-11.
+5. **`ReflectionCache`** *(internal)*: Caches immutable reflection metadata (constructor signatures and class hierarchy) for the duration of the process.
 
 ## Design Decisions
 
+### Vendor-specific configuration at the composition root; PSR-11 only at runtime
+
+`Definitions` is the Kaly dialect used to build the graph. `Container` is a plain
+PSR-11 container. After the bootstrap, application code only ever needs
+`Psr\Container\ContainerInterface`, so it can never accidentally depend on a
+proprietary container API.
+
+`ContainerInterface::class` is reserved: `$container->get(ContainerInterface::class)`
+always returns the container itself. `Definitions` refuses to set or bind this id.
+
+### `get()` resolves services, `make()` instantiates classes
+
+Every service requested through `Container::get()` is cached and therefore shared.
+For a fresh instance of a concrete class, use `Injector::make()`, which does not read
+Kaly definitions and does not populate the container cache.
+
 ### No Attributes or Annotations
 
-Kaly DI intentionally avoids "magic" attributes. This keeps your domain code completely decoupled from the DI infrastructure. All wiring is done in PHP code, which is easier to debug, refactor, and type-check.
+Kaly DI intentionally avoids "magic" attributes. This keeps domain code completely
+decoupled from the DI infrastructure. All wiring is done in PHP code, which is easier
+to debug, refactor, and type-check.
 
 ### Assertions for Development
 
-Most input validation (type checks, lock enforcement, class existence) is performed using PHP `assert()`. This provides excellent feedback during development (`zend.assertions = 1`) but ensures zero overhead in production (`zend.assertions = -1`).
-
-### Cache by Default
-
-The container adheres to the principle of "invariable results". Every requested service is cached after its first instantiation. For factory-like behavior, use a closure in your definitions.
+Most configuration validation (type checks, lock enforcement, class existence) is
+performed using PHP `assert()`. This provides excellent feedback during development
+(`zend.assertions = 1`) but ensures zero overhead in production (`zend.assertions = -1`).
 
 ### No Native Lazy Objects
 
-While PHP 8.4 introduced native Lazy Objects (via `ReflectionClass::newLazyGhost()` and `newLazyProxy()`), Kaly DI explicitly chooses not to implement them. The container focuses on modern, long-running architectures (like FrankenPHP, Swoole, or RoadRunner). In these environments, applications boot once and dependencies are resolved and cached in memory across thousands of requests. Because singletons are already kept alive, the boot-time performance benefit of lazy loading is negligible. Furthermore, forcing dependency instantiation immediately enforces application correctness by failing fast on misconfigured graphs, rather than failing in the middle of request execution.
+While PHP 8.4 introduced native Lazy Objects, Kaly DI explicitly chooses not to
+implement them. The container focuses on modern, long-running architectures (like
+FrankenPHP, Swoole, or RoadRunner) where applications boot once and services are
+resolved and cached in memory. Because singletons are already kept alive, the
+boot-time performance benefit of lazy loading is negligible. Forcing dependency
+instantiation immediately also enforces application correctness by failing fast on
+misconfigured graphs.
 
 ## Exception Hierarchy
 
-All library exceptions implement `Psr\Container\ContainerExceptionInterface`.
+All library exceptions implement `Psr\Container\ContainerExceptionInterface`
+(except `ReferenceNotFoundException`, which implements `NotFoundExceptionInterface`).
 
 - **`ContainerException`**: Base exception for general container errors.
-- **`ReferenceNotFoundException`**: Thrown when a service ID is requested but not found.
+- **`ReferenceNotFoundException`**: Thrown when a service id is requested but not found.
 - **`CircularReferenceException`**: Thrown when a dependency chain loops back on itself.
-- **`UnresolvableParameterException`**: Thrown when a required constructor parameter cannot be auto-wired.
+- **`UnresolvableParameterException`**: Thrown when a required parameter cannot be resolved.

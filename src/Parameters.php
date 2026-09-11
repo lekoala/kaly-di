@@ -14,6 +14,10 @@ use ReflectionUnionType;
 
 /**
  * Helper class to deal with parameters resolution.
+ *
+ * Resolution is always strict: a required parameter that cannot be satisfied
+ * (by an explicit argument, the container, a default value or null) throws an
+ * UnresolvableParameterException.
  */
 final class Parameters
 {
@@ -105,6 +109,8 @@ final class Parameters
                 'object' => is_object($value),
                 'false' => $value === false,
                 'true' => $value === true,
+                // PHP allows widening int to float
+                'float' => is_float($value) || is_int($value),
                 default => get_debug_type($value) === $typeName,
             };
         }
@@ -118,6 +124,10 @@ final class Parameters
     }
 
     /**
+     * Resolve constructor/callable arguments.
+     *
+     * Explicit arguments always win, then the container, then defaults/null.
+     *
      * @param \ReflectionParameter[] $parameters
      * @param array<mixed> $arguments
      * @param ContainerInterface|null $container
@@ -130,42 +140,6 @@ final class Parameters
         array $parameters,
         array $arguments,
         ?ContainerInterface $container = null,
-    ): array {
-        return self::doResolveParameters($parameters, $arguments, $container, ResolutionMode::Lenient);
-    }
-
-    /**
-     * @param \ReflectionParameter[] $parameters
-     * @param array<mixed> $arguments
-     * @param ContainerInterface|null $container
-     * @return array<mixed>
-     * @throws UnresolvableParameterException
-     * @throws InvalidArgumentException
-     * @throws CircularReferenceException When the container resolves a parameter that has circular dependencies
-     */
-    public static function resolveParametersOrThrow(
-        array $parameters,
-        array $arguments,
-        ?ContainerInterface $container = null,
-    ): array {
-        return self::doResolveParameters($parameters, $arguments, $container, ResolutionMode::Strict);
-    }
-
-    /**
-     * @param \ReflectionParameter[] $parameters
-     * @param array<mixed> $arguments
-     * @param ContainerInterface|null $container
-     * @param ResolutionMode $mode Whether to throw on missing parameters
-     * @return array<mixed>
-     * @throws UnresolvableParameterException
-     * @throws InvalidArgumentException
-     * @throws CircularReferenceException When the container resolves a parameter that has circular dependencies
-     */
-    private static function doResolveParameters(
-        array $parameters,
-        array $arguments,
-        ?ContainerInterface $container,
-        ResolutionMode $mode,
     ): array {
         // If we have an int indexed array, arguments are positional
         // Use named keys if no arguments are provided
@@ -228,16 +202,7 @@ final class Parameters
                 continue;
             }
 
-            try {
-                $resolvedArgument = self::resolveSingleParameter($parameter, $container);
-                $resolvedArguments[$argumentKey] = $resolvedArgument;
-            } catch (UnresolvableParameterException $e) {
-                if ($mode === ResolutionMode::Strict) {
-                    throw $e;
-                }
-
-                // Simply ignore, this will trigger an ArgumentCount error
-            }
+            $resolvedArguments[$argumentKey] = self::resolveSingleParameter($parameter, $container);
         }
 
         return $resolvedArguments;

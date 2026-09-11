@@ -33,11 +33,15 @@ class CallbackOrderTest extends TestCase
         // Sorted interfaces alphabetically (IOrder1, IOrder2 -> I1, I2)
         // Then parents (OrderParent -> Parent), then concrete (OrderChild -> Child)
         $expected = ['I1', 'I2', 'Parent', 'Child'];
-        $this->assertEquals($expected, $child->log, "Order for concrete class is incorrect");
+        $this->assertEquals($expected, $child->log, 'Order for concrete class is incorrect');
 
         // Test requesting named service
         /** @var OrderChild $named */
         $named = $container->get('named');
-        $this->assertEquals(['I1', 'I2', 'Parent', 'Child', 'Named'], $named->log, "Order for named service is incorrect");
+        $this->assertEquals(
+            ['I1', 'I2', 'Parent', 'Child', 'Named'],
+            $named->log,
+            'Order for named service is incorrect',
+        );
     }
 }

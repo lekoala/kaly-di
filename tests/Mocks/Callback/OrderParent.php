@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kaly\Tests\Mocks\Callback;
 
 class OrderParent implements IOrder1

@@ -5,35 +5,35 @@ declare(strict_types=1);
 namespace Kaly\Tests;
 
 use AssertionError;
+use InvalidArgumentException;
 use Kaly\Di\Container;
-use PHPUnit\Framework\TestCase;
-use Kaly\Tests\Mocks\TestObject;
-use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Di\Definitions;
 use Kaly\Di\Injector;
-use Kaly\Tests\Mocks\TestObject5;
+use Kaly\Di\UnresolvableParameterException;
 use Kaly\Tests\Mocks\TestAltInterface;
-use Kaly\Tests\Mocks\TestObject6;
-use InvalidArgumentException;
+use Kaly\Tests\Mocks\TestInterface;
+use Kaly\Tests\Mocks\TestObject;
+use Kaly\Tests\Mocks\TestObject5;
 use Kaly\Tests\Mocks\TestObject5Parent;
-use ArgumentCountError;
+use Kaly\Tests\Mocks\TestObject6;
+use PHPUnit\Framework\TestCase;
 
 class InjectorTest extends TestCase
 {
     public function testInjectorCreate(): void
     {
-        $injector = new Injector();
+        $injector = new Injector(new Container());
         $inst = $injector->make(TestObject5::class, v: 'test', v2: 'test', arr: []);
 
         $this->assertInstanceOf(TestObject5::class, $inst);
         $this->assertEquals('test', $inst->v);
         $this->assertEquals('test', $inst->v2);
         $this->assertEquals([], $inst->arr);
-        $this->assertEquals(null, $inst->v3); // its nullable
+        $this->assertNull($inst->v3); // its nullable
 
         // You can also use ...array if you don't like named arguments
         $inst = $injector->make(TestObject5::class, ...['v' => 'test', 'v2' => 'test', 'arr' => []]);
-        $this->assertEquals($inst, $inst);
+        $this->assertInstanceOf(TestObject5::class, $inst);
 
         $definitions = Definitions::create()
             ->parameter(TestObject5::class, 'v', 'from definitions')
@@ -44,103 +44,150 @@ class InjectorTest extends TestCase
         $container = new Container($definitions);
         $injectorContainer = new Injector($container);
 
-        // but with the container, the definitions are used
-        $parameters = $definitions->allParametersFor(TestObject5::class);
-        $this->assertEquals('from definitions', $parameters['v']);
-
         $instFromContainer = $container->get(TestObject5::class);
         $this->assertEquals('from definitions', $instFromContainer->v);
         $this->assertNull($instFromContainer->v3);
 
         // if object has been created by container, the injector will use it
-        $fn = fn(TestObject5 $a): \Kaly\Tests\Mocks\TestObject5 => $a;
-        $this->assertEquals($instFromContainer, $injectorContainer->invoke($fn));
+        $fn = fn(TestObject5 $a): TestObject5 => $a;
+        $this->assertSame($instFromContainer, $injectorContainer->invoke($fn));
 
-        // if we make a parent class, any unprovided parameter is provided (and cached) by the container
+        // if we make a parent class, the unprovided object dependency comes from the container
         $instWithoutParam = $injectorContainer->make(TestObject5Parent::class);
-        $this->assertEquals($instFromContainer, $instWithoutParam->v);
+        $this->assertSame($instFromContainer, $instWithoutParam->v);
 
-        // With an injector without container, this would not work because it cannot build a TestObject5
-        $this->expectException(ArgumentCountError::class);
-        $this->assertEquals($instFromContainer, $injector->invoke($fn)); // too few arguments, TestObject5 is not provided
+        // With a container that cannot build TestObject5, this fails with a clear exception
+        $this->expectException(UnresolvableParameterException::class);
+        (new Injector(new Container()))->invoke($fn);
     }
 
     public function testInjectorTypes(): void
     {
-        $injector = new Injector();
+        $injector = new Injector(new Container());
         $fn = fn(): string => 'test';
         $this->assertEquals('test', $injector->invoke($fn));
-        // required built-in params now throw
+
+        // required built-in params throw a typed exception
         $fn = fn(string $a): string => $a;
-        $this->expectException(\ArgumentCountError::class);
+        $this->expectException(UnresolvableParameterException::class);
         $injector->invoke($fn);
+    }
+
+    public function testInjectorArgumentPassing(): void
+    {
+        $injector = new Injector(new Container());
+
         // provide a value (named)
         $fn = fn(string $a, string $b): string => $a . $b;
         $this->assertEquals('testother', $injector->invoke($fn, b: 'other', a: 'test'));
+
         // default value is preferred
         $fn = fn(string $a, string $b = 'other'): string => $a . $b;
         $this->assertEquals('testother', $injector->invoke($fn, a: 'test'));
+
         // provide a value (positional). Null values must work
         $fn = fn(string $a, string $b): string => $a . $b;
         $this->assertEquals('testother', $injector->invoke($fn, 'test', 'other'));
+
         $fn = fn(string $a, ?string $b, ?string $c): string => $a . $b . $c;
         $this->assertEquals('testother', $injector->invoke($fn, 'test', null, 'other'));
+
         // you can use ...spread syntax (named, positional)
         $fn = fn(string $a): string => $a;
         $this->assertEquals('test', $injector->invoke($fn, ...[
-            'a' => 'test'
+            'a' => 'test',
         ]));
         $this->assertEquals('test', $injector->invoke($fn, ...[
-            'test'
+            'test',
         ]));
+
         // complex types
         $fn = fn(string|bool $a): string|bool => $a;
-        $this->assertEquals(true, $injector->invoke($fn, true));
+        $this->assertTrue($injector->invoke($fn, true));
         $this->assertEquals('test', $injector->invoke($fn, 'test'));
+
         // intersection type
         $fn = fn(TestInterface&TestAltInterface $intersection) => $intersection;
         $demo = new TestObject6('test', 'test', []);
         $this->assertEquals($demo, $injector->invoke($fn, $demo));
+
         // union type
         $fn = fn(TestInterface|TestAltInterface $intersection) => $intersection;
         $demo = new TestObject5('test', 'test', []);
         $this->assertEquals($demo, $injector->invoke($fn, $demo));
         $demo = new TestObject6('test', 'test', []);
         $this->assertEquals($demo, $injector->invoke($fn, $demo));
+
         // provide an invalid value throws AssertionError
         $fn = fn(string $a): string => $a;
         $this->expectException(AssertionError::class);
-        $this->assertEquals('test', $injector->invoke($fn, a: true));
+        $injector->invoke($fn, a: true);
     }
 
-    public function testMakeInterfaceWithoutContainer(): void
+    public function testMakeInterfaceThrows(): void
     {
-        $injector = new Injector();
+        $injector = new Injector(new Container());
         $this->expectException(InvalidArgumentException::class);
         $injector->make(TestInterface::class);
     }
 
-    public function testMakeInterfaceWithContainer(): void
+    public function testMakeNonExistentClassThrows(): void
     {
-        $definitions = Definitions::create()->set(TestInterface::class, TestObject::class);
-        $container = new Container($definitions);
-        $injector = new Injector($container);
-        $inst = $injector->make(TestInterface::class);
-        $this->assertInstanceOf(TestObject::class, $inst);
+        $injector = new Injector(new Container());
+        $this->expectException(InvalidArgumentException::class);
+        $injector->make('NonExistentClass');
+    }
 
-        // Injector always create fresh objects
-        $inst2 = $injector->make(TestInterface::class);
-        $this->assertNotSame($inst, $inst2);
+    public function testMakeAlwaysReturnsFreshInstances(): void
+    {
+        $container = new Container();
+        $injector = new Injector($container);
+
+        $first = $injector->make(TestObject::class);
+        $second = $injector->make(TestObject::class);
+
+        $this->assertNotSame($first, $second);
+
+        // make() does not populate the container cache
+        $this->assertNotSame($first, $container->get(TestObject::class));
+    }
+
+    public function testMakeResolvesObjectDependenciesFromContainer(): void
+    {
+        $container = new Container(Definitions::create()->bind(TestInterface::class, TestObject::class));
+        $injector = new Injector($container);
+
+        $inst = $injector->make(TestObject6::class, v: 'a', v2: 'b', arr: []);
+
+        $this->assertInstanceOf(TestObject6::class, $inst);
+    }
+
+    public function testMakeDoesNotUseContainerDefinitionsForTheRootClass(): void
+    {
+        $container = new Container(
+            Definitions::create()
+                ->parameter(TestObject5::class, 'v', 'from definitions')
+                ->parameter(TestObject5::class, 'v2', 'from definitions v2')
+                ->parameter(TestObject5::class, 'arr', [])
+                ->lock(),
+        );
+        $injector = new Injector($container);
+
+        // explicit arguments win, definitions are not consumed by make()
+        $inst = $injector->make(TestObject5::class, v: 'explicit', v2: 'x', arr: []);
+        $this->assertEquals('explicit', $inst->v);
+
+        // definitions do not fill missing root arguments either
+        $this->expectException(UnresolvableParameterException::class);
+        $injector->make(TestObject5::class);
     }
 
     /**
      * Test calling make with spread arrays
-     *
-     * @return void
      */
     public function testMakeWithSpread(): void
     {
-        $injector = new Injector();
+        $injector = new Injector(new Container());
         $inst = $injector->make(TestObject5::class, ...['v' => 'test', 'v2' => 'test2', 'arr' => ['a']]);
         $this->assertEquals('test', $inst->v);
         $this->assertEquals('test2', $inst->v2);
@@ -155,16 +202,15 @@ class InjectorTest extends TestCase
 
     public function testMakeThrowsWhenPassingNonArrayToNamedVariadicInjector(): void
     {
-        $injector = new Injector();
+        $injector = new Injector(new Container());
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/must be an array when passed by name/');
-        $injector->invoke(function (...$names) {
-        }, names: 'not-an-array');
+        $injector->invoke(function (...$names) {}, names: 'not-an-array');
     }
 
     public function testClosureCaching(): void
     {
-        $injector = new Injector();
+        $injector = new Injector(new Container());
 
         $f1 = function (int $a) {
             return $a;
@@ -179,5 +225,24 @@ class InjectorTest extends TestCase
         // Re-invoke to ensure cache doesn't break things
         $this->assertEquals(2, $injector->invoke($f1, a: 2));
         $this->assertEquals('other', $injector->invoke($f2, b: 'other'));
+    }
+
+    public function testInvokeNonClosureCallable(): void
+    {
+        $injector = new Injector(new Container());
+        $object = new class {
+            public function greet(string $name): string
+            {
+                return 'hello ' . $name;
+            }
+
+            public static function staticGreet(string $name): string
+            {
+                return 'static ' . $name;
+            }
+        };
+
+        $this->assertEquals('hello bob', $injector->invoke([$object, 'greet'], name: 'bob'));
+        $this->assertEquals('static bob', $injector->invoke([$object::class, 'staticGreet'], name: 'bob'));
     }
 }

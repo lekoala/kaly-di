@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use Exception;
 use Kaly\Di\ContainerException;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerExceptionInterface;
-use Exception;
 
 class ContainerExceptionTest extends TestCase
 {

@@ -8,15 +8,15 @@ use ReflectionClass;
 use ReflectionParameter;
 
 /**
- * Unified runtime cache to avoid executing expensive operations multiple times
+ * Caches immutable reflection metadata for the duration of the process.
  *
- * This cache is not persisted - it only lives for the duration of the request/process.
- * It's useful for long-running PHP applications where reflection and class lookups
- * would otherwise be repeated on every request.
+ * Only facts that cannot change while the process runs are cached: a class's
+ * constructor signature and its class hierarchy. Class existence is
+ * deliberately NOT cached, so a negative lookup can never become stale.
  *
  * @internal
  */
-final class RuntimeCache
+final class ReflectionCache
 {
     /**
      * @var array<class-string, array{ReflectionClass<object>, ReflectionParameter[]}>
@@ -27,16 +27,6 @@ final class RuntimeCache
      * @var array<class-string, array{interfaces: list<class-string>, parents: list<class-string>}>
      */
     private static array $hierarchy = [];
-
-    /**
-     * @var array<string, bool>
-     */
-    private static array $classes = [];
-
-    /**
-     * @var array<string, bool>
-     */
-    private static array $types = [];
 
     /**
      * @template T of object
@@ -77,27 +67,18 @@ final class RuntimeCache
     }
 
     /**
-     * Check if a class exists
+     * Check whether a class can be instantiated.
+     *
+     * Returns false for interfaces, abstract classes and enums. Existence is
+     * checked on every call (never cached), only the reflection is cached.
      */
-    public static function classExists(string $class): bool
+    public static function isInstantiable(string $class): bool
     {
-        if (!array_key_exists($class, self::$classes)) {
-            self::$classes[$class] = class_exists($class);
+        if (!class_exists($class)) {
+            return false;
         }
 
-        return self::$classes[$class];
-    }
-
-    /**
-     * Check if a type exists (class or interface)
-     */
-    public static function typeExists(string $type): bool
-    {
-        if (!array_key_exists($type, self::$types)) {
-            self::$types[$type] = class_exists($type) || interface_exists($type);
-        }
-
-        return self::$types[$type];
+        return self::reflection($class)[0]->isInstantiable();
     }
 
     /**
@@ -107,7 +88,5 @@ final class RuntimeCache
     {
         self::$reflection = [];
         self::$hierarchy = [];
-        self::$classes = [];
-        self::$types = [];
     }
 }

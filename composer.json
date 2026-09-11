@@ -8,18 +8,15 @@
             "email": "thomas@lekoala.be"
         }
     ],
-    "version": "0.2.0",
     "require": {
         "php": "^8.3",
         "psr/container": "^1.1.2|^2.0.2"
     },
     "require-dev": {
-        "carthage-software/mago": "1.24.0",
+        "carthage-software/mago": "^1",
         "composer/ca-bundle": "^1.5",
-        "phpstan/phpstan": "^2",
-        "phpunit/phpunit": "^11",
-        "rector/rector": "^2",
-        "squizlabs/php_codesniffer": "^3.10"
+        "phpstan/phpstan": "^2.2",
+        "phpunit/phpunit": "^11"
     },
     "autoload": {
         "psr-4": {
@@ -37,18 +34,15 @@
     "scripts": {
         "test": [
             "@phpunit",
-            "@phpcs",
-            "@phpstan"
+            "@phpstan",
+            "@mago:lint",
+            "@mago:format"
         ],
         "phpunit": "phpunit",
-        "phpcbf": "phpcbf",
-        "phpcs": "phpcs",
         "phpstan": "phpstan analyse src --memory-limit=-1",
-        "rector-dry": "rector --dry-run",
-        "rector": "rector",
-        "mago:fmt": "mago fmt",
-        "mago:lint": "mago lint --minimum-report-level warning src"
+        "mago:lint": "mago lint --minimum-report-level warning src tests",
+        "mago:format": "mago fmt --check",
+        "fmt": "mago fmt"
     },
-    "minimum-stability": "dev",
     "prefer-stable": true
 }

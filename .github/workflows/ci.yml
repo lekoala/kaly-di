@@ -25,29 +25,22 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
           restore-keys: ${{ runner.os }}-composer-
 
       - name: Composer install
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
-      - name: Setup Mago
-        uses: nhedger/setup-mago@v1
-
       - name: Mago Format Check
-        run: mago fmt --check
+        run: composer mago:format
 
       - name: Mago Lint
         if: success() || failure()
-        run: mago lint
-
-      - name: PHP Code Sniffer
-        if: success() || failure()
-        run: vendor/bin/phpcs --standard=phpcs.xml.dist src/
+        run: composer mago:lint
 
       - name: PHPStan
         if: success() || failure()
-        run: vendor/bin/phpstan analyse src/
+        run: composer phpstan
 
   test:
     name: PHPUnit PHP ${{ matrix.php }}
@@ -76,11 +69,11 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+          key: ${{ runner.os }}-composer-${{ hashFiles('composer.json') }}
           restore-keys: ${{ runner.os }}-composer-
 
       - name: Composer install
         run: composer install --no-progress --prefer-dist --optimize-autoloader
 
       - name: PHPUnit
-        run: vendor/bin/phpunit --configuration phpunit.xml.dist
+        run: composer phpunit

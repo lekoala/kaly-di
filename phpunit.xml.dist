@@ -11,6 +11,8 @@
         </include>
     </source>
     <php>
+        <ini name="zend.assertions" value="1"/>
+        <ini name="assert.exception" value="1"/>
         <const name="PHPUNIT_TESTSUITE" value="true"/>
     </php>
 </phpunit>

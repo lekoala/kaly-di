@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kaly\Tests\Mocks;
 
 use PDO;
@@ -16,12 +18,8 @@ class TestObject4
     public string $other;
     public array $queue = [];
 
-    public function __construct(
-        PDO $pdo,
-        string $bar,
-        string $baz = 'baz-wrong',
-        array $arr = []
-    ) {
+    public function __construct(PDO $pdo, string $bar, string $baz = 'baz-wrong', array $arr = [])
+    {
         $this->pdo = $pdo;
         $this->bar = $bar;
         $this->baz = $baz;

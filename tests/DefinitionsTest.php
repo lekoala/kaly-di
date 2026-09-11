@@ -5,29 +5,32 @@ declare(strict_types=1);
 namespace Kaly\Tests;
 
 use AssertionError;
+use InvalidArgumentException;
 use Kaly\Di\Container;
 use Kaly\Di\Definitions;
-use Kaly\Tests\Mocks\TestInterface;
-use Kaly\Tests\Mocks\TestObject;
-use Kaly\Tests\Mocks\TestObject5;
-use PHPUnit\Framework\TestCase;
-use Kaly\Tests\Mocks\TestObject2;
 use Kaly\Tests\Mocks\TestAltInterface;
 use Kaly\Tests\Mocks\TestApp;
 use Kaly\Tests\Mocks\TestExtendedApp;
-use Kaly\Tests\Mocks\TestChild;
-use Kaly\Tests\Mocks\TestGrandparent;
-use Kaly\Tests\Mocks\TestParent;
-use Kaly\Tests\Mocks\ReflTestMockInterface1;
-use Kaly\Tests\Mocks\ReflTestMockInterface2;
-use Kaly\Tests\Mocks\ReflTestMockObject;
+use Kaly\Tests\Mocks\TestInterface;
+use Kaly\Tests\Mocks\TestObject;
+use Kaly\Tests\Mocks\TestObject2;
+use Kaly\Tests\Mocks\TestObject5;
+use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
+use ReflectionMethod;
+use ReflectionType;
+
+abstract class DefinitionsTestAbstract {}
+
+final class DefinitionsTestConcrete extends DefinitionsTestAbstract {}
 
 class DefinitionsTest extends TestCase
 {
-    public function testCreateAndMerge(): void
+    public function testCreateFromArray(): void
     {
         $arr = [
-            TestInterface::class => TestObject::class
+            TestInterface::class => TestObject::class,
+            'app' => TestObject::class,
         ];
 
         $def = new Definitions($arr);
@@ -39,18 +42,9 @@ class DefinitionsTest extends TestCase
         $this->assertTrue($def->has(TestInterface::class));
         $this->assertFalse(!$def->has(TestInterface::class));
         $this->assertEquals(TestObject::class, $def->get(TestInterface::class));
-
-        $obj = new TestObject5('v', 'v2', []);
-        $def->register($obj);
-        $this->assertTrue($def->has(TestAltInterface::class));
-        $this->assertTrue($def->has(TestObject5::class));
-
-        $def->lock();
-        $this->assertTrue($def->isLocked());
-
-        // Throws assert errors afterwards
-        $this->expectException(AssertionError::class);
-        $def->set("something", "something");
+        $this->assertEquals(TestObject::class, $def->get('app'));
+        $this->assertNull($def->get('nonexistent'));
+        $this->assertFalse($def->has('nonexistent'));
     }
 
     public function testMergeDefinitions(): void
@@ -58,121 +52,109 @@ class DefinitionsTest extends TestCase
         $def1 = Definitions::create()->set('obj', TestObject::class);
         $def2 = Definitions::create()->set('obj2', TestObject2::class);
 
-        $this->assertTrue($def1->has('obj'));
-        $this->assertTrue($def2->has('obj2'));
-
         $def1->parameter(TestObject5::class, 'v', 'provided_value');
         $def1->callback(TestObject::class, fn($obj) => $obj);
-        $def1->resolve(TestObject::class, 'v', fn($k) => $k);
 
-        // parameters can come from multiple source, the latest to be merged will overwrite any existing param
+        // parameters and callbacks can come from multiple sources, latest merged wins per key
         $def2->parameter(TestObject5::class, 'v2', 'provided value');
+        $def2->parameter(TestObject5::class, 'v', 'overwritten');
 
-        $final = new Definitions($def1);
+        $final = new Definitions();
+        $final->merge($def1);
         $final->merge($def2);
 
         $this->assertTrue($final->has('obj'));
         $this->assertTrue($final->has('obj2'));
         $this->assertArrayHasKey(TestObject5::class, $final->getParameters());
-        $this->assertArrayHasKey('v', $final->getParameters()[TestObject5::class]);
-        $this->assertArrayHasKey('v2', $final->getParameters()[TestObject5::class]);
+        $this->assertSame('overwritten', $final->parametersFor(TestObject5::class)['v']);
+        $this->assertSame('provided value', $final->parametersFor(TestObject5::class)['v2']);
         $this->assertArrayHasKey(TestObject::class, $final->getCallbacks());
-        $this->assertArrayHasKey(TestObject::class, $final->getResolvers());
+        $this->assertCount(1, $final->callbacksFor(TestObject::class));
     }
 
-    public function testGetAndSet(): void
+    public function testMergeKeepsUnnamedCallbacksDistinct(): void
     {
-        $def = Definitions::create();
-        $def->set('key', TestObject::class);
-        $this->assertTrue($def->has('key'));
-        $this->assertEquals(TestObject::class, $def->get('key'));
-        $this->assertNull($def->get('nonexistent'));
-        $this->assertTrue(!$def->has('nonexistent'));
+        $callbackA = fn($obj) => $obj;
+        $callbackB = fn($obj) => $obj;
+
+        $def1 = Definitions::create()->callback(TestObject::class, $callbackA);
+        $def2 = Definitions::create()->callback(TestObject::class, $callbackB);
+
+        $def1->merge($def2);
+
+        $callbacks = array_values($def1->callbacksFor(TestObject::class));
+        $this->assertCount(2, $callbacks);
+        $this->assertSame($callbackA, $callbacks[0]);
+        $this->assertSame($callbackB, $callbacks[1]);
+    }
+
+    public function testNullIsNotAValidDefinition(): void
+    {
+        $method = new ReflectionMethod(Definitions::class, 'set');
+        $type = $method->getParameters()[1]->getType();
+
+        $this->assertInstanceOf(ReflectionType::class, $type);
+        $this->assertFalse($type->allowsNull());
     }
 
     public function testExpand(): void
     {
         $def = Definitions::create();
-        $def->set('closure', fn(): string => 'result');
-        // The closure accepts a Definitions object and an array of parameters
-        // This can be used to use other defined services from within the closures to build relevant objects
-        $def->set('closure_params', fn(Definitions $def, array $parameters): string => 'result ' . $parameters['my_param']);
-        $def->parameter('closure_params', 'my_param', 'my_value');
+        $def->set('closure', fn(ContainerInterface $c): string => 'result');
         $def->set('value', TestObject::class);
+        $def->set('service', fn(ContainerInterface $c): object => $c->get(TestObject::class));
 
-        $this->assertEquals('result', $def->expand('closure'));
-        $this->assertEquals('result my_value', $def->expand('closure_params'));
-        $this->assertEquals(TestObject::class, $def->expand('value'));
-    }
+        $container = new Container();
 
-    public function testRegister(): void
-    {
-        $def = Definitions::create();
-        $obj = new TestObject5('v', 'v2', []);
-        $def->register($obj);
-
-        $this->assertTrue($def->has(TestObject5::class));
-        $this->assertTrue($def->has(TestAltInterface::class));
-        $this->assertTrue($def->get(TestAltInterface::class) === $obj);
-        $this->assertTrue($def->get(TestObject5::class) === $obj);
+        $this->assertEquals('result', $def->expand('closure', $container));
+        $this->assertEquals(TestObject::class, $def->expand('value', $container));
+        $this->assertInstanceOf(TestObject::class, $def->expand('service', $container));
     }
 
     public function testBind(): void
     {
         $def = Definitions::create();
-        $def->bind(TestObject::class);
+        $def->bind(TestInterface::class, TestObject::class);
         $this->assertTrue($def->has(TestInterface::class));
         $this->assertEquals(TestObject::class, $def->get(TestInterface::class));
 
-        // two definitions can be equals
+        // Abstract classes can be bound too
         $def2 = Definitions::create();
-        $def2->bind(TestObject::class, TestInterface::class);
-        $this->assertEquals($def, $def2);
-
-        // using parameters
-        $def3 = Definitions::create();
-        $def3->bind(TestObject2::class, TestInterface::class, ['v' => 'test']);
-        $this->assertEquals(['v' => 'test'], $def3->parametersFor(TestObject2::class));
+        $def2->bind(DefinitionsTestAbstract::class, DefinitionsTestConcrete::class);
+        $this->assertEquals(DefinitionsTestConcrete::class, $def2->get(DefinitionsTestAbstract::class));
     }
 
-    public function testBindAll(): void
+    public function testReservedIdCannotBeSetOrBound(): void
     {
         $def = Definitions::create();
-        // Pre-set an interface to something else to test the "if not already set" behavior
-        $def->set(ReflTestMockInterface1::class, TestObject::class);
 
-        $def->bindAll(ReflTestMockObject::class);
-
-        // Interface 1 was already set, so it should NOT be overwritten
-        $this->assertEquals(TestObject::class, $def->get(ReflTestMockInterface1::class));
-
-        // Interface 2 was NOT set, so it should be bound to the class
-        $this->assertTrue($def->has(ReflTestMockInterface2::class));
-        $this->assertEquals(ReflTestMockObject::class, $def->get(ReflTestMockInterface2::class));
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessage('reserved by the container');
+        $def->set(ContainerInterface::class, TestObject::class);
     }
 
-    public function testResolve(): void
+    public function testReservedIdCannotBeBound(): void
     {
         $def = Definitions::create();
-        $def->resolve(TestObject::class, 'key', 'value');
-        $this->assertArrayHasKey('key', $def->resolversFor(TestObject::class));
-        $this->assertEquals('value', $def->resolversFor(TestObject::class)['key']);
+
+        $this->expectException(InvalidArgumentException::class);
+        $def->bind(ContainerInterface::class, TestObject::class);
     }
 
-    public function testResolveAll(): void
+    public function testReservedIdCannotReceiveParameters(): void
     {
         $def = Definitions::create();
-        $resolver = fn(string $name, string $class): string => 'service';
-        $def->resolveAll(TestObject::class, $resolver);
-        $resolvers = $def->resolversFor(TestObject::class);
-        $this->assertArrayHasKey('*', $resolvers);
-        $this->assertSame($resolver, $resolvers['*']);
+
+        $this->expectException(InvalidArgumentException::class);
+        $def->parameter(ContainerInterface::class, 'x', 1);
     }
 
-    public function testResolversFor(): void
+    public function testReservedIdCannotReceiveCallbacks(): void
     {
         $def = Definitions::create();
-        $this->assertEquals([], $def->resolversFor('NonExistentClass'));
+
+        $this->expectException(InvalidArgumentException::class);
+        $def->callback(ContainerInterface::class, fn() => null);
     }
 
     public function testParameter(): void
@@ -191,23 +173,47 @@ class DefinitionsTest extends TestCase
         $this->assertArrayHasKey('param2', $def->parametersFor(TestObject::class));
         $this->assertEquals('value1', $def->parametersFor(TestObject::class)['param1']);
         $this->assertEquals('value2', $def->parametersFor(TestObject::class)['param2']);
+    }
 
-        $def->parameters(TestObject::class, 'value3', 'value4');
-        $this->assertEquals('value3', $def->parametersFor(TestObject::class)[0]);
-        $this->assertEquals('value4', $def->parametersFor(TestObject::class)[1]);
+    public function testAllParametersForGivesPriorityToId(): void
+    {
+        $def = Definitions::create();
+        $def->parameter(TestObject::class, 'shared', 'class');
+        $def->parameter(TestInterface::class, 'shared', 'id');
+        $def->parameter(TestInterface::class, 'only', 'id');
 
-        $allParams = $def->allParametersFor(TestObject::class);
-        $this->assertCount(4, $allParams);
-        $this->assertEquals('value3', $allParams[0]);
+        $all = $def->allParametersFor(TestObject::class, TestInterface::class);
+        $this->assertSame('id', $all['shared']);
+        $this->assertSame('id', $all['only']);
+
+        // When class and id are the same, parameters are returned once
+        $same = $def->allParametersFor(TestObject::class, TestObject::class);
+        $this->assertSame('class', $same['shared']);
     }
 
     public function testCallback(): void
     {
         $def = Definitions::create();
-        $def->callback(TestObject::class, fn(): null => null);
-        $this->assertArrayHasKey(0, $def->callbacksFor(TestObject::class));
-        $def->callback(TestObject::class, fn(): null => null, 'test');
-        $this->assertArrayHasKey('test', $def->callbacksFor(TestObject::class));
+        $callback1 = fn(): null => null;
+        $callback2 = fn(): null => null;
+        $def->callback(TestObject::class, $callback1);
+        $def->callback(TestObject::class, $callback2, 'test');
+
+        $callbacks = $def->callbacksFor(TestObject::class);
+        $this->assertCount(2, $callbacks);
+        $this->assertContains($callback1, $callbacks);
+        $this->assertSame($callback2, $callbacks['test']);
+    }
+
+    public function testNamedCallbackCanBeOverwritten(): void
+    {
+        $def = Definitions::create();
+        $def->callback(TestObject::class, fn() => null, 'named');
+        $overwrite = fn() => null;
+        $def->callback(TestObject::class, $overwrite, 'named');
+
+        $this->assertCount(1, $def->callbacksFor(TestObject::class));
+        $this->assertSame($overwrite, $def->callbacksFor(TestObject::class)['named']);
     }
 
     public function testLock(): void
@@ -216,81 +222,21 @@ class DefinitionsTest extends TestCase
         $this->assertFalse($def->isLocked());
         $def->lock();
         $this->assertTrue($def->isLocked());
-        $def->unlock();
-        $this->assertFalse($def->isLocked());
+
+        // Mutating a locked definitions object throws
+        $this->expectException(AssertionError::class);
+        $def->set('something', TestObject::class);
     }
 
-    public function testSetAll(): void
+    public function testCreateContainer(): void
     {
         $def = Definitions::create();
-        $def->setAll([
-            'key1' => TestObject::class,
-            'key2' => TestObject::class,
-        ]);
-        $this->assertTrue($def->has('key1'));
-        $this->assertTrue($def->has('key2'));
-        $this->assertEquals(TestObject::class, $def->get('key1'));
-        $this->assertEquals(TestObject::class, $def->get('key2'));
-    }
+        $def->set('test', TestObject::class);
+        $container = $def->createContainer();
 
-    public function testSort(): void
-    {
-        $closure = fn(): null => null;
-        $def = Definitions::create();
-        $def->set('z', TestObject::class);
-        $def->set('a', TestObject::class);
-        $def->parameter('z', 'z', 'z');
-        $def->parameter('a', 'a', 'a');
-        $def->callback('z', $closure);
-        $def->callback('a', $closure);
-        $def->resolve('z', 'z', $closure);
-        $def->resolve('a', 'a', $closure);
-        $def->sort();
-
-        $this->assertEquals(['a' => TestObject::class, 'z' => TestObject::class], $def->getValues());
-        $this->assertEquals(['a' => ['0' => $closure], 'z' => ['0' => $closure]], $def->getCallbacks());
-        $this->assertEquals(['a' => ['a' => 'a'], 'z' => ['z' => 'z']], $def->getParameters());
-        $this->assertEquals(['a' => ['a' => $closure], 'z' => ['z' => $closure]], $def->getResolvers());
-    }
-
-    public function testGetValues(): void
-    {
-        $def = Definitions::create();
-        $def->set('z', TestObject::class);
-        $def->set('a', TestObject::class);
-        $this->assertEquals(['z' => TestObject::class, 'a' => TestObject::class], $def->getValues());
-    }
-
-    public function testGetCallbacks(): void
-    {
-        $closure = fn(): null => null;
-        $def = Definitions::create();
-        $def->callback('z', $closure);
-        $def->callback('a', $closure);
-        $this->assertEquals([
-            'z' => ['0' => $closure],
-            'a' => ['0' => $closure]
-        ], $def->getCallbacks());
-    }
-
-    public function testGetParameters(): void
-    {
-        $def = Definitions::create();
-        $def->parameter('z', 'z', 'z');
-        $def->parameter('a', 'a', 'a');
-        $this->assertEquals(['z' => ['z' => 'z'], 'a' => ['a' => 'a']], $def->getParameters());
-    }
-
-    public function testGetResolvers(): void
-    {
-        $closure = fn(): null => null;
-        $def = Definitions::create();
-        $def->resolve('z', 'z', $closure);
-        $def->resolve('a', 'a', $closure);
-        $this->assertEquals([
-            'z' => ['z' => $closure],
-            'a' => ['a' => $closure]
-        ], $def->getResolvers());
+        $this->assertInstanceOf(Container::class, $container);
+        $this->assertTrue($container->has('test'));
+        $this->assertTrue($def->isLocked());
     }
 
     public function testCallbacksForClass(): void
@@ -309,32 +255,28 @@ class DefinitionsTest extends TestCase
         $this->assertSame($childCallback, $callbacks[1]);
     }
 
-    public function testCallbacksForClassInheritanceOrder(): void
+    public function testGetValuesAndParameters(): void
     {
         $def = Definitions::create();
-        $grandparentCallback = fn($obj) => 'grandparent';
-        $parentCallback = fn($obj) => 'parent';
-        $childCallback = fn($obj) => 'child';
+        $def->set('z', TestObject::class);
+        $def->set('a', TestObject::class);
+        $this->assertEquals(['z' => TestObject::class, 'a' => TestObject::class], $def->getValues());
 
-        $def->callback(TestGrandparent::class, $grandparentCallback);
-        $def->callback(TestParent::class, $parentCallback);
-        $def->callback(TestChild::class, $childCallback);
-
-        $callbacks = $def->callbacksForClass(TestChild::class);
-
-        $this->assertCount(3, $callbacks);
-        $this->assertSame($grandparentCallback, $callbacks[0]);
-        $this->assertSame($parentCallback, $callbacks[1]);
-        $this->assertSame($childCallback, $callbacks[2]);
+        $def->parameter('z', 'z', 'z');
+        $def->parameter('a', 'a', 'a');
+        $this->assertEquals(['z' => ['z' => 'z'], 'a' => ['a' => 'a']], $def->getParameters());
     }
 
-    public function testCreateContainer(): void
+    public function testAltInterfaceCanBeRegisteredAsObject(): void
     {
-        $def = Definitions::create();
-        $def->set('test', TestObject::class);
-        $container = $def->createContainer();
+        $obj = new TestObject5('v', 'v2', []);
+        $def = Definitions::create([
+            TestAltInterface::class => $obj,
+            TestObject5::class => $obj,
+        ]);
 
-        $this->assertInstanceOf(Container::class, $container);
-        $this->assertTrue($container->has('test'));
+        $this->assertTrue($def->has(TestAltInterface::class));
+        $this->assertSame($obj, $def->get(TestAltInterface::class));
+        $this->assertSame($obj, $def->get(TestObject5::class));
     }
 }

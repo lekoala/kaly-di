@@ -1,77 +1,88 @@
 # Definitions
 
-The `Definitions` object is where you configure your dependency injection container. It provides a fluent API for mapping identifiers to classes, objects, or closures.
+The `Definitions` object is where you configure your dependency injection container.
+It provides a fluent API for mapping identifiers to classes, objects, or closures,
+and for declaring constructor parameters and post-construction callbacks.
 
-## Setting Services
-
-### Basic Mapping
-
-Typically, the identifier is a class or interface name, but it can be any unique string.
+The primitives are orthogonal: each method does exactly one thing.
 
 ```php
 use Kaly\Di\Definitions;
 
 $definitions = Definitions::create()
-    ->set(\PDO::class, new \PDO('sqlite::memory:')) // Map to a specific object
-    ->set('app.cache', MyCache::class);            // Map to a class name (auto-wired)
+    ->set(\PDO::class, fn () => new \PDO('sqlite::memory:'))
+    ->bind(LoggerInterface::class, FileLogger::class)
+    ->parameters(FileLogger::class, path: '/var/log/app.log')
+    ->callback(FileLogger::class, fn (FileLogger $logger) => $logger->open());
 ```
 
-## Binding Interfaces
+## Setting Services
 
-Use `register`, `bind`, or `bindAll` to map interfaces to concrete implementations.
+The identifier is usually a class or interface name, but it can be any unique string.
 
 ```php
-$definitions->bind(UserInterface::class, MyUser::class);
+$definitions
+    ->set(\PDO::class, new \PDO('sqlite::memory:')) // an object instance
+    ->set('app.cache', MyCache::class);             // a class name (auto-wired)
 ```
+
+A closure is a lazy factory: it is executed the first time the id is requested by
+`get()`, and its result is then shared. The closure receives the container.
+
+```php
+$definitions->set(LoggerInterface::class, function (ContainerInterface $c) {
+    return new FileLogger($c->get(Config::class));
+});
+```
+
+> `null` is not a valid definition. Concrete classes are already auto-wired, so a
+> `null` entry would add nothing.
+
+## Binding Abstractions
+
+Use `bind($abstract, $concrete)` to map an interface or an abstract class to a
+concrete implementation.
+
+```php
+$definitions->bind(UserRepositoryInterface::class, SqlUserRepository::class);
+$definitions->bind(AbstractHandler::class, LoggingHandler::class);
+```
+
+The concrete class must be compatible with the abstraction. Configuration stays
+explicit: there is no "single interface" auto-detection.
 
 ## Setting Parameters
 
 You can explicitly provide values for constructor parameters.
 
-### Single Parameter
-
 ```php
-$definitions->parameter(MyClass::class, 'apiKey', 'your-api-key');
+$definitions
+    ->parameter(MyClass::class, 'apiKey', 'your-api-key')
+    ->parameters(MyClass::class, debug: true, retries: 3);
 ```
 
-### Multiple Parameters with Named Arguments
-
-```php
-$definitions->parameters(MyClass::class, [
-    'apiKey' => 'your-api-key',
-    'debug' => true
-]);
-```
+When an id is bound to a class, parameters can be declared for either the id or the
+concrete class. The id takes precedence.
 
 ### Referencing Container Services
 
-To pass a service from the container as a parameter, pass a closure that receives the container:
+To pass a service from the container as a parameter, use a closure that receives the
+container:
 
 ```php
-$definitions->parameter(MyClass::class, 'db', fn($container) => $container->get('db.connection'));
+$definitions->parameter(
+    MyClass::class,
+    'db',
+    fn (ContainerInterface $c) => $c->get('db.connection'),
+);
 ```
 
-The closure is resolved lazily when the object is instantiated, so it always gets the current state of the container.
-
-### Dynamic Resolution
-
-Since closures receive the container, you can implement conditional logic:
-
-```php
-$definitions->parameter(CacheService::class, 'driver', function($container) {
-    // Use Redis if available, fall back to file cache
-    if ($container->has(RedisConnection::class)) {
-        return $container->get(RedisConnection::class);
-    }
-    return $container->get(FileCache::class);
-});
-```
-
-This is useful for environment-based configuration, feature flags, or graceful degradation when optional services are not available.
+The closure is resolved lazily when the object is instantiated, so it always sees the
+current state of the container.
 
 ## Registering Callbacks
 
-Callbacks allow you to configure objects after they are instantiated.
+Callbacks configure objects after they are instantiated.
 
 ```php
 $definitions->callback(MyService::class, function (MyService $service) {
@@ -81,17 +92,19 @@ $definitions->callback(MyService::class, function (MyService $service) {
 
 Callbacks can be registered for:
 
-- Specific class or service name
-- Implementation of an interface
-- Inheritance from a parent class
+- a specific class or service id,
+- an implementation of an interface,
+- an inheritance from a parent class.
 
-If multiple callbacks apply, they are executed in a deterministic order (interfaces first, then parents, then the concrete class).
+If multiple callbacks apply, they are executed in a deterministic order: interfaces
+(alphabetically), then parents (top to bottom), then the concrete class, and finally
+id-specific callbacks.
 
 ## Merging and Locking
 
 ### Merging
 
-You can split your definitions across multiple files and merge them.
+You can split your definitions across multiple files and merge them. Later values win.
 
 ```php
 $definitions1 = Definitions::create()->set('a', 'v1');
@@ -101,45 +114,33 @@ $definitions1->merge($definitions2);
 
 ### Locking
 
-Once a `Definitions` object is locked, it cannot be modified. This is useful for preventing runtime changes to the container configuration.
+Once a `Definitions` object is locked, it cannot be modified. This prevents runtime
+changes to the container configuration.
 
 ```php
 $definitions->lock();
-// $definitions->set('c', 'v3'); // Throws an error (in development)
 ```
 
 ### Creating the Container
 
-`createContainer()` is the terminal method of the fluent chain. It creates the container and automatically locks the definitions:
+`createContainer()` is the terminal method of the fluent chain. It locks the
+definitions and creates the container:
 
 ```php
 $container = Definitions::create()
-    ->set(PDO::class, fn() => new PDO('sqlite::memory:'))
-    ->createContainer(); // definitions are now locked
+    ->set(PDO::class, fn () => new PDO('sqlite::memory:'))
+    ->createContainer();
 ```
 
-If you need to modify definitions after creating a container, create them first and pass them manually:
+## The Reserved `ContainerInterface` Id
 
-```php
-$definitions = Definitions::create()->set(...);
-$container = new Container($definitions);
-// $definitions can still be modified
-```
+`Psr\Container\ContainerInterface` is reserved by the container:
+`$container->get(ContainerInterface::class)` always returns the container itself, and
+`Definitions` refuses to `set()` or `bind()` that id. This lets factories and
+infrastructure objects receive the container without ever knowing the concrete
+`Kaly\Di\Container`.
 
-## Getting Fresh Instances
+## Shared vs Fresh
 
-By default, the container caches instances. If you need a fresh instance every time:
-
-1. **Use a Factory Closure:**
-
-   ```php
-   $definitions->set(MyClass::class, fn() => new MyClass());
-   ```
-
-2. **Use the Injector:**
-   The `Injector::make()` method always returns a fresh instance.
-
-   ```php
-   $injector = new Injector($container);
-   $fresh = $injector->make(MyClass::class);
-   ```
+`Definitions` configures what `Container::get()` returns. `get()` always returns a
+shared instance. For a fresh instance, see the [Injector](./injector.md).

@@ -5,17 +5,19 @@ declare(strict_types=1);
 namespace Kaly\Di;
 
 use Closure;
-use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
-use ReflectionNamedType;
 
 /**
- * A PSR-11 compliant dependency injection container
+ * A PSR-11 compliant dependency injection container.
  *
- * Instances are resolved lazily and cached: calling get() with the same id
- * always returns the same object. For fresh instances, use factory closures
- * or the Injector.
+ * Instances are resolved lazily and shared: calling get() with the same id
+ * always returns the same object. To create a fresh instance of a concrete
+ * class, use the Injector.
+ *
+ * The runtime API is deliberately limited to ContainerInterface::get() and
+ * has(). Configuration lives in Definitions and is only used at the
+ * composition root.
  *
  * @link https://github.com/devanych/di-container
  * @link https://github.com/capsulephp/di
@@ -23,30 +25,103 @@ use ReflectionNamedType;
 class Container implements ContainerInterface
 {
     protected readonly Definitions $definitions;
+
     /**
-     * @var array<string,bool>
+     * Ids that must never be auto-wired by the container, otherwise it would
+     * silently build a second container or an empty Definitions.
+     *
+     * @var list<class-string>
+     */
+    private const NOT_AUTO_WIRED = [
+        self::class,
+        Definitions::class,
+    ];
+
+    /**
+     * @var array<string,true>
      */
     protected array $building = [];
+
     /**
      * @var array<string,object>
      */
     protected array $instances = [];
 
     /**
-     * @param Definitions|array<string,class-string|object|null>|null $definitions
+     * @param Definitions|array<string,class-string|object>|null $definitions
      */
     public function __construct(Definitions|array|null $definitions = null)
     {
         // Create definitions if needed
         if (is_array($definitions) || is_null($definitions)) {
-            $definitions = new Definitions($definitions);
+            $definitions = new Definitions($definitions ?? []);
         }
         $this->definitions = $definitions;
     }
 
     /**
-     * @param string $id
-     * @return object
+     * Finds an entry of the container by its identifier and returns it.
+     *
+     * @template T of object
+     * @param string|class-string<T> $id
+     * @return ($id is class-string<T> ? T : object)
+     * @throws NotFoundExceptionInterface No entry was found for **this** identifier.
+     * @throws \Psr\Container\ContainerExceptionInterface Error while retrieving the entry.
+     */
+    public function get(string $id): object
+    {
+        // The container always resolves to itself through its interface
+        if ($id === ContainerInterface::class) {
+            return $this;
+        }
+
+        // If has($id) returns false, get($id) MUST throw a NotFoundExceptionInterface.
+        if (!$this->has($id)) {
+            throw new ReferenceNotFoundException("`{$id}` is not set");
+        }
+
+        // Return cached instance
+        if (array_key_exists($id, $this->instances)) {
+            return $this->instances[$id];
+        }
+
+        // A cached instance does not exist yet, build it
+        $instance = $this->build($id);
+        // Callbacks run only once since instances are cached
+        $this->configure($instance, $id);
+        $this->instances[$id] = $instance;
+
+        return $instance;
+    }
+
+    /**
+     * Returns true if the container can return an entry for the given identifier.
+     *
+     * `true` means:
+     * - the reserved ContainerInterface entry,
+     * - an explicit definition or binding,
+     * - a concrete, instantiable class (auto-wiring).
+     *
+     * Interfaces and abstract classes therefore return false unless bound.
+     */
+    public function has(string $id): bool
+    {
+        if ($id === ContainerInterface::class) {
+            return true;
+        }
+        // There is an explicit definition for it
+        if ($this->definitions->has($id)) {
+            return true;
+        }
+        // Never auto-wire the container internals
+        if (in_array($id, self::NOT_AUTO_WIRED, true)) {
+            return false;
+        }
+        // Any concrete instantiable class can be built without definition
+        return ReflectionCache::isInstantiable($id);
+    }
+
+    /**
      * @throws CircularReferenceException
      * @throws ContainerException
      */
@@ -55,11 +130,8 @@ class Container implements ContainerInterface
         // By default, the id is a class...
         $class = $id;
 
-        // ...but any id can be matched to a class by a specific definition
-        $definitions = $this->definitions;
-
-        // If we have a definition
-        $definition = $definitions->expand($id);
+        // ...but any id can be matched to a class or an object by a specific definition
+        $definition = $this->definitions->expand($id, $this);
         if ($definition !== null) {
             // Can be an instance of something or the result of a closure
             // eg: 'app' => $app or 'app' => fn () => new App
@@ -74,16 +146,16 @@ class Container implements ContainerInterface
 
         // Use try/finally pattern to make sure we unset building[$id] when throwing exceptions
         try {
-            if (array_key_exists($class, $this->building)) {
+            if (array_key_exists($id, $this->building)) {
                 $buildChain = implode(', ', array_keys($this->building));
-                throw new CircularReferenceException("Circular reference to `{$class}` in `{$buildChain}`");
+                throw new CircularReferenceException("Circular reference to `{$id}` in `{$buildChain}`");
             }
             if (!class_exists($class)) {
                 throw new ContainerException("Class `{$class}` does not exist");
             }
-            $this->building[$class] = true;
+            $this->building[$id] = true;
 
-            [$reflection, $constructorParameters] = RuntimeCache::reflection($class);
+            [$reflection, $constructorParameters] = ReflectionCache::reflection($class);
 
             $arguments = $this->resolveConstructorArguments($id, $class, $constructorParameters);
 
@@ -97,14 +169,14 @@ class Container implements ContainerInterface
                 throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
             }
         } finally {
-            unset($this->building[$class]);
+            unset($this->building[$id]);
         }
 
         return $instance;
     }
 
     /**
-     * Resolve constructor arguments using definitions, resolvers, and container lookups
+     * Resolve constructor arguments using definitions and container lookups
      *
      * @param string $id The service id being built
      * @param class-string $class The concrete class being instantiated
@@ -114,12 +186,9 @@ class Container implements ContainerInterface
      */
     private function resolveConstructorArguments(string $id, string $class, array $constructorParameters): array
     {
-        $definitions = $this->definitions;
-
         // 1. Gather explicitly defined parameters for this class/id
-        $definedParameters = $definitions->allParametersFor($class, $id);
         $arguments = [];
-        foreach ($definedParameters as $paramName => $paramValue) {
+        foreach ($this->definitions->allParametersFor($class, $id) as $paramName => $paramValue) {
             if ($paramValue instanceof Closure) {
                 $arguments[$paramName] = $paramValue($this);
                 continue;
@@ -127,35 +196,10 @@ class Container implements ContainerInterface
             $arguments[$paramName] = $paramValue;
         }
 
-        // 2. Check Resolvers for any missing arguments that map to services
-        foreach ($constructorParameters as $parameter) {
-            $name = $parameter->getName();
-
-            if (array_key_exists($name, $arguments)) {
-                continue;
-            }
-
-            $types = Parameters::getParameterTypes($parameter);
-            foreach ($types as $type) {
-                if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
-                    continue;
-                }
-                $typeName = $type->getName();
-                assert(RuntimeCache::typeExists($typeName));
-                /** @var class-string $typeName */
-                $serviceName = $definitions->resolveName($name, $typeName, $class);
-
-                if ($serviceName && $definitions->has($serviceName)) {
-                    $arguments[$name] = $this->get($serviceName);
-                    break;
-                }
-            }
-        }
-
-        // 3. Delegate final resolution (type-checks, defaults, nullability, auto-wiring) to Parameters
+        // 2. Delegate final resolution (type-checks, defaults, nullability, auto-wiring) to Parameters
         try {
             /** @var array<string,mixed> */
-            return Parameters::resolveParametersOrThrow($constructorParameters, $arguments, $this);
+            return Parameters::resolveParameters($constructorParameters, $arguments, $this);
         } catch (UnresolvableParameterException $e) {
             // Rethrow with the exact Container error formatting
             throw new UnresolvableParameterException(
@@ -171,80 +215,25 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Finds an entry of the container by its identifier and returns it.
+     * Call additional methods after instantiation.
      *
-     * @template T of object
-     * @param string|class-string<T> $id
-     * @return ($id is class-string<T> ? T : object)
-     * @throws NotFoundExceptionInterface No entry was found for **this** identifier.
-     * @throws ContainerExceptionInterface Error while retrieving the entry.
-     */
-    public function get(string $id): object
-    {
-        // If has($id) returns false, get($id) MUST throw a NotFoundExceptionInterface.
-        if ($this->has($id) === false) {
-            throw new ReferenceNotFoundException("`{$id}` is not set");
-        }
-        // Avoid issues when resolving the container
-        if ($id === self::class) {
-            return $this;
-        }
-        // If we need an injector, pass an injector that knows about the container
-        if ($id === Injector::class && !$this->definitions->has(Injector::class)) {
-            return new Injector($this);
-        }
-        // Return cached instance
-        if (array_key_exists($id, $this->instances)) {
-            return $this->instances[$id];
-        }
-
-        // A cached instance does not exist yet, build it
-        $instance = $this->build($id);
-        // These will run only once since we cache instances
-        $this->configure($instance, $id);
-        $this->instances[$id] = $instance;
-
-        return $instance;
-    }
-
-    /**
-     * Returns true if the container can return an entry for the given identifier.
-     * Returns false otherwise.
-     *
-     * `has($id)` returning true does not mean that `get($id)` will not throw an exception.
-     * It does however mean that `get($id)` will not throw a `NotFoundExceptionInterface`.
-     */
-    public function has(string $id): bool
-    {
-        // There is a definition for it
-        if ($this->definitions->has($id)) {
-            return true;
-        }
-        // Any existing class can be built without definition
-        // It's the same has having SomeClass => null as a definition
-        return RuntimeCache::classExists($id);
-    }
-
-    /**
-     * Call additional methods after instantiation
-     * Callbacks will match based on the class name and the id
+     * Callbacks are matched on the class hierarchy. Id-specific callbacks are
+     * appended only for custom service ids (not for class or interface ids,
+     * which are already covered by the hierarchy).
      *
      * @param object $instance The instance to configure
      * @param string $id Id in the container
-     * @return void
      */
     protected function configure(object $instance, string $id): void
     {
-        $definitions = $this->definitions;
         $instanceClass = $instance::class;
 
-        // Get callbacks defined for the class and its hierarchy (now including interfaces)
-        $callbacks = $definitions->callbacksForClass($instanceClass);
+        // Get callbacks defined for the class and its hierarchy (including interfaces)
+        $callbacks = $this->definitions->callbacksForClass($instanceClass);
 
-        // If requested by a specific ID (that is not the class itself or an interface already covered),
-        // we append specific callbacks for that ID.
-        if ($id !== $instanceClass && !interface_exists($id, false)) {
-            $callbacks = [...$callbacks, ...array_values($definitions->callbacksFor($id))];
+        // Id-specific callbacks only apply to custom service ids
+        if ($id !== $instanceClass && !class_exists($id) && !interface_exists($id)) {
+            $callbacks = [...$callbacks, ...array_values($this->definitions->callbacksFor($id))];
         }
 
         foreach ($callbacks as $closure) {

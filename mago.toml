@@ -4,8 +4,8 @@ php-version = "8.3.0"
 
 [source]
 workspace = "."
-paths = ["src"]
-includes = ["vendor"]
+paths = ["src", "tests"]
+includes = []
 excludes = []
 
 [formatter]
@@ -20,6 +20,10 @@ integrations = ["phpunit"]
 ambiguous-function-call = { enabled = false }
 literal-named-argument = { enabled = false }
 assert-description = { enabled = false }
+assertion-style = { style = "this" }
+strict-assertions = { enabled = false }
+single-class-per-file = { enabled = false }
+excessive-parameter-list = { enabled = false }
 cyclomatic-complexity = { threshold = 40 }
 kan-defect = { threshold = 4 }
 too-many-methods = { threshold = 30 }

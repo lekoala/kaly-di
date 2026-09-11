@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use Exception;
 use Kaly\Di\UnresolvableParameterException;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerExceptionInterface;
-use Exception;
 
 class UnresolvableParameterExceptionTest extends TestCase
 {

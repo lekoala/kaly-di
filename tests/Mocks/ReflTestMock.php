@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Kaly\Tests\Mocks;
 
 use stdClass;
@@ -12,7 +14,7 @@ class ReflTestMock
         stdClass $class,
         ReflTestMockInterface1&ReflTestMockInterface2 $intersection,
         ?stdClass $null,
-        int $builtin
+        int $builtin,
     ): void {
         // empty
     }
@@ -26,15 +28,13 @@ class ReflTestMock
         bool $param6 = false,
         ?string $param7 = null,
         ?ReflTestMockObject $param8 = null,
-        string ...$variadic
+        string ...$variadic,
     ): void {
         // empty
     }
 
-    public function methodWithContainer(
-        stdClass $param1,
-        ?string $param2 = null
-    ): void {
+    public function methodWithContainer(stdClass $param1, ?string $param2 = null): void
+    {
         // empty
     }
 
@@ -45,7 +45,7 @@ class ReflTestMock
         int $d,
         float $e,
         ReflTestMock $other,
-        iterable $i
+        iterable $i,
     ) {
         // empty
     }
@@ -62,7 +62,7 @@ class ReflTestMock
         array $array,
         false $false,
         true $true,
-        null $null
+        null $null,
     ) {
         // empty
     }

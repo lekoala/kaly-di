@@ -85,13 +85,34 @@ class Container implements ContainerInterface
             return $this->instances[$id];
         }
 
-        // A cached instance does not exist yet, build it
-        $instance = $this->build($id);
-        // Callbacks run only once since instances are cached
-        $this->configure($instance, $id);
-        $this->instances[$id] = $instance;
+        // Guard the whole resolution: factory closures, constructor and callbacks
+        if (array_key_exists($id, $this->building)) {
+            $buildChain = implode(', ', array_keys($this->building));
+            throw new CircularReferenceException("Circular reference to `{$id}` in `{$buildChain}`");
+        }
 
-        return $instance;
+        // Use try/finally pattern to make sure we unset building[$id] when throwing exceptions
+        $this->building[$id] = true;
+
+        try {
+            // A cached instance does not exist yet: build, configure and cache it
+            $instance = $this->build($id);
+            // Callbacks run only once since instances are cached
+            $this->configure($instance, $id);
+            $this->instances[$id] = $instance;
+
+            return $instance;
+        } catch (
+            ReferenceNotFoundException|CircularReferenceException|UnresolvableParameterException|ContainerException $e
+        ) {
+            // Preserve our own exceptions, wrap any other (including third-party PSR ones)
+            throw $e;
+        } catch (\Throwable $e) {
+            $type = $e::class;
+            throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
+        } finally {
+            unset($this->building[$id]);
+        }
     }
 
     /**
@@ -122,7 +143,11 @@ class Container implements ContainerInterface
     }
 
     /**
-     * @throws CircularReferenceException
+     * Build the object matching an id.
+     *
+     * The cycle guard, exception normalization and instance caching are handled
+     * by get(), which wraps the whole resolution process.
+     *
      * @throws ContainerException
      */
     protected function build(string $id): object
@@ -144,32 +169,22 @@ class Container implements ContainerInterface
             $class = $definition;
         }
 
-        // Use try/finally pattern to make sure we unset building[$id] when throwing exceptions
+        if (!class_exists($class)) {
+            throw new ContainerException("Class `{$class}` does not exist");
+        }
+
+        [$reflection, $constructorParameters] = ReflectionCache::reflection($class);
+
+        $arguments = $this->resolveConstructorArguments($id, $class, $constructorParameters);
+
+        // Wrap any exception in a ContainerException
         try {
-            if (array_key_exists($id, $this->building)) {
-                $buildChain = implode(', ', array_keys($this->building));
-                throw new CircularReferenceException("Circular reference to `{$id}` in `{$buildChain}`");
-            }
-            if (!class_exists($class)) {
-                throw new ContainerException("Class `{$class}` does not exist");
-            }
-            $this->building[$id] = true;
-
-            [$reflection, $constructorParameters] = ReflectionCache::reflection($class);
-
-            $arguments = $this->resolveConstructorArguments($id, $class, $constructorParameters);
-
-            // Wrap any exception in a ContainerException
-            try {
-                $flatArguments = Parameters::flattenArguments($constructorParameters, $arguments);
-                /** @var object $instance */
-                $instance = $reflection->newInstanceArgs($flatArguments);
-            } catch (\Throwable $e) {
-                $type = $e::class;
-                throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
-            }
-        } finally {
-            unset($this->building[$id]);
+            $flatArguments = Parameters::flattenArguments($constructorParameters, $arguments);
+            /** @var object $instance */
+            $instance = $reflection->newInstanceArgs($flatArguments);
+        } catch (\Throwable $e) {
+            $type = $e::class;
+            throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
         }
 
         return $instance;

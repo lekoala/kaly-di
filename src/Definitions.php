@@ -6,6 +6,7 @@ namespace Kaly\Di;
 
 use Closure;
 use InvalidArgumentException;
+use LogicException;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -17,8 +18,8 @@ use Psr\Container\ContainerInterface;
  *
  * The primitives are orthogonal: each method does exactly one thing.
  *
- * Validation checks (class_exists, lock state) use assert() for zero production
- * overhead.
+ * Configuration state such as locking is enforced at runtime, while
+ * development-time validity checks use assert() where appropriate.
  */
 final class Definitions
 {
@@ -83,7 +84,7 @@ final class Definitions
      */
     public function merge(Definitions $definitions): void
     {
-        $this->assertNotLocked();
+        $this->ensureNotLocked();
 
         $this->values = array_replace($this->values, $definitions->getValues());
 
@@ -173,7 +174,7 @@ final class Definitions
      */
     public function set(string $id, string|object $value): self
     {
-        $this->assertNotLocked();
+        $this->ensureNotLocked();
         $this->assertNotReserved($id);
         assert(is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
         // Avoid resolving stdClass with the DI container
@@ -190,7 +191,7 @@ final class Definitions
      */
     public function bind(string $abstract, string $concrete): self
     {
-        $this->assertNotLocked();
+        $this->ensureNotLocked();
         $this->assertNotReserved($abstract);
         assert(interface_exists($abstract) || class_exists($abstract), "Abstraction `{$abstract}` does not exist");
         assert(class_exists($concrete), "Class `{$concrete}` does not exist");
@@ -206,7 +207,7 @@ final class Definitions
      */
     public function parameter(string $id, string $name, mixed $value): self
     {
-        $this->assertNotLocked();
+        $this->ensureNotLocked();
         $this->assertNotReserved($id);
         $this->parameters[$id][$name] = $value;
         return $this;
@@ -218,7 +219,7 @@ final class Definitions
      */
     public function parameters(string $id, mixed ...$params): self
     {
-        $this->assertNotLocked();
+        $this->ensureNotLocked();
         foreach ($params as $k => $v) {
             $this->parameter($id, (string) $k, $v);
         }
@@ -256,7 +257,7 @@ final class Definitions
      */
     public function callback(string $id, Closure $fn, ?string $name = null): self
     {
-        $this->assertNotLocked();
+        $this->ensureNotLocked();
         $this->assertNotReserved($id);
         // Use a stable, collision-free key so merging definitions never renumbers callbacks
         $name ??= (string) spl_object_id($fn);
@@ -317,9 +318,11 @@ final class Definitions
         return $this->locked;
     }
 
-    private function assertNotLocked(): void
+    private function ensureNotLocked(): void
     {
-        assert(!$this->locked);
+        if ($this->locked) {
+            throw new LogicException('Definitions are locked and cannot be modified.');
+        }
     }
 
     private function assertNotReserved(string $id): void

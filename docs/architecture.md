@@ -63,9 +63,13 @@ to debug, refactor, and type-check.
 
 ### Assertions for Development
 
-Most configuration validation (type checks, lock enforcement, class existence) is
+Development-time validation (type checks, class existence, binding compatibility) is
 performed using PHP `assert()`. This provides excellent feedback during development
 (`zend.assertions = 1`) but ensures zero overhead in production (`zend.assertions = -1`).
+
+Runtime guarantees, by contrast, are enforced with real exceptions and hold regardless
+of assertion settings: locking throws a `LogicException`, and the reserved
+`ContainerInterface` id throws an `InvalidArgumentException`.
 
 ### No Native Lazy Objects
 

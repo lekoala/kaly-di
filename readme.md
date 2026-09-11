@@ -73,10 +73,14 @@ Detailed guides are available in the `docs/` directory:
 
 ## A Note on Assertions
 
-Kaly DI uses PHP `assert()` for configuration validation (e.g., checking class
-existence, definition lock, type compatibility). This is **by design**: these checks
-run automatically in development (`zend.assertions = 1`) but are disabled in
-production (`zend.assertions = -1`) for zero overhead.
+Kaly DI distinguishes runtime guarantees from development-time validation:
+
+- **Runtime guarantees** (locking, the reserved `ContainerInterface` id) throw real
+  exceptions and therefore always hold, even in production.
+- **Development-time validation** (class existence, binding compatibility, argument
+  types) uses PHP `assert()`. These checks run in development
+  (`zend.assertions = 1`) but are disabled in production (`zend.assertions = -1`)
+  for zero overhead.
 
 Ensure your test suite covers your DI configuration to catch mistakes before deployment.
 

@@ -134,7 +134,11 @@ $definitions1->merge($definitions2);
 ### Locking
 
 Once a `Definitions` object is locked, it cannot be modified. This prevents runtime
-changes to the container configuration.
+changes to the container configuration. Any mutator (`set()`, `bind()`, `parameter()`,
+`parameters()`, `callback()`, `merge()`) then throws a `LogicException`.
+
+Locking is enforced at runtime, whether or not assertions are enabled, so the
+guarantee holds in production too.
 
 ```php
 $definitions->lock();

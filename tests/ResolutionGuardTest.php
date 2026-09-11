@@ -20,6 +20,57 @@ use Psr\Container\ContainerInterface;
  */
 class ResolutionGuardTest extends TestCase
 {
+    public function testResolutionRecoversAfterFactoryFailure(): void
+    {
+        $calls = 0;
+        $di = Definitions::create()->set('retry', function () use (&$calls): TestObject {
+            if (++$calls === 1) {
+                throw new LogicException('factory failed');
+            }
+            return new TestObject();
+        })->createContainer();
+
+        try {
+            $di->get('retry');
+            $this->fail('Expected a ContainerException');
+        } catch (ContainerException $e) {
+            $this->assertInstanceOf(LogicException::class, $e->getPrevious());
+        }
+        $this->assertSame(1, $calls);
+
+        $instance = $di->get('retry');
+        $this->assertInstanceOf(TestObject::class, $instance);
+        $this->assertSame(2, $calls);
+        $this->assertSame($instance, $di->get('retry'));
+        $this->assertSame(2, $calls);
+    }
+
+    public function testResolutionRecoversAfterCallbackFailure(): void
+    {
+        $calls = 0;
+        $di = Definitions::create()
+            ->callback(TestObject::class, function (TestObject $obj) use (&$calls): void {
+                if (++$calls === 1) {
+                    throw new LogicException('callback failed');
+                }
+            })
+            ->createContainer();
+
+        try {
+            $di->get(TestObject::class);
+            $this->fail('Expected a ContainerException');
+        } catch (ContainerException $e) {
+            $this->assertInstanceOf(LogicException::class, $e->getPrevious());
+        }
+        $this->assertSame(1, $calls);
+
+        $instance = $di->get(TestObject::class);
+        $this->assertInstanceOf(TestObject::class, $instance);
+        $this->assertSame(2, $calls);
+        $this->assertSame($instance, $di->get(TestObject::class));
+        $this->assertSame(2, $calls);
+    }
+
     public function testItDetectsDirectConstructorCircularDependency(): void
     {
         $di = new Container();

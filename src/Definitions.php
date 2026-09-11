@@ -7,7 +7,6 @@ namespace Kaly\Di;
 use Closure;
 use InvalidArgumentException;
 use Psr\Container\ContainerInterface;
-use stdClass;
 
 /**
  * Fluent builder for container configuration.
@@ -178,7 +177,7 @@ final class Definitions
         $this->assertNotReserved($id);
         assert(is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
         // Avoid resolving stdClass with the DI container
-        assert($id !== stdClass::class, 'Cannot set stdClass as id');
+        assert($id !== \stdClass::class, 'Cannot set stdClass as id');
         $this->values[$id] = $value;
         return $this;
     }

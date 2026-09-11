@@ -82,10 +82,12 @@ $args = ['apiKey' => 'secret', 'debug' => true];
 $service = $injector->make(MyService::class, ...$args);
 
 // For invoke:
-$result = $injector->invoke($fn, ...$args);
+$handler = fn (string $apiKey, bool $debug): string => $apiKey . ($debug ? '!' : '');
+$result = $injector->invoke($handler, ...$args);
 
 // Positional arguments work too:
-$result = $injector->invoke($fn, ...['value1', 'value2']);
+$concat = fn (string $a, string $b): string => $a . $b;
+$result = $injector->invoke($concat, ...['value1', 'value2']);
 ```
 
 > **Note:** `make` always returns a **new instance**. It uses the container only to

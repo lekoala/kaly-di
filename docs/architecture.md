@@ -35,13 +35,25 @@ PSR-11 container. After the bootstrap, application code only ever needs
 proprietary container API.
 
 `ContainerInterface::class` is reserved: `$container->get(ContainerInterface::class)`
-always returns the container itself. `Definitions` refuses to set or bind this id.
+always returns the container itself. `Definitions` refuses to declare it through any
+mutator (`set()`, `bind()`, `parameter()`, `callback()`).
 
 ### `get()` resolves services, `make()` instantiates classes
 
 Every service requested through `Container::get()` is cached and therefore shared.
 For a fresh instance of a concrete class, use `Injector::make()`, which does not read
 Kaly definitions and does not populate the container cache.
+
+### `has()` is exact
+
+`Container::has($id)` returns true only when the container can actually provide the
+entry:
+
+- the reserved `ContainerInterface` entry,
+- an explicit definition or binding,
+- a concrete, instantiable class (auto-wiring).
+
+Interfaces and abstract classes therefore return `false` unless they are bound.
 
 ### No Attributes or Annotations
 
@@ -67,10 +79,11 @@ misconfigured graphs.
 
 ## Exception Hierarchy
 
-All library exceptions implement `Psr\Container\ContainerExceptionInterface`
-(except `ReferenceNotFoundException`, which implements `NotFoundExceptionInterface`).
+All library exceptions implement `Psr\Container\ContainerExceptionInterface`.
+`ReferenceNotFoundException` additionally implements `NotFoundExceptionInterface`
+(which itself extends `ContainerExceptionInterface`).
 
-- **`ContainerException`**: Base exception for general container errors.
+- **`ContainerException`**: General container error.
 - **`ReferenceNotFoundException`**: Thrown when a service id is requested but not found.
 - **`CircularReferenceException`**: Thrown when a dependency chain loops back on itself.
 - **`UnresolvableParameterException`**: Thrown when a required parameter cannot be resolved.

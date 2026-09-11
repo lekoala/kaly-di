@@ -16,6 +16,15 @@ $definitions = Definitions::create()
     ->callback(FileLogger::class, fn (FileLogger $logger) => $logger->open());
 ```
 
+You can also build definitions from an array of `id => class|object|closure`:
+
+```php
+$definitions = Definitions::create([
+    \PDO::class => fn () => new \PDO('sqlite::memory:'),
+    LoggerInterface::class => FileLogger::class,
+]);
+```
+
 ## Setting Services
 
 The identifier is usually a class or interface name, but it can be any unique string.
@@ -30,6 +39,8 @@ A closure is a lazy factory: it is executed the first time the id is requested b
 `get()`, and its result is then shared. The closure receives the container.
 
 ```php
+use Psr\Container\ContainerInterface;
+
 $definitions->set(LoggerInterface::class, function (ContainerInterface $c) {
     return new FileLogger($c->get(Config::class));
 });
@@ -100,6 +111,14 @@ If multiple callbacks apply, they are executed in a deterministic order: interfa
 (alphabetically), then parents (top to bottom), then the concrete class, and finally
 id-specific callbacks.
 
+A callback receives the instance, then the container:
+
+```php
+$definitions->callback(MyService::class, function (MyService $service, ContainerInterface $c) {
+    $service->setup($c->get(Config::class));
+});
+```
+
 ## Merging and Locking
 
 ### Merging
@@ -107,8 +126,8 @@ id-specific callbacks.
 You can split your definitions across multiple files and merge them. Later values win.
 
 ```php
-$definitions1 = Definitions::create()->set('a', 'v1');
-$definitions2 = Definitions::create()->set('b', 'v2');
+$definitions1 = Definitions::create()->set('repository', UserRepository::class);
+$definitions2 = Definitions::create()->set('mailer', Mailer::class);
 $definitions1->merge($definitions2);
 ```
 
@@ -136,9 +155,9 @@ $container = Definitions::create()
 
 `Psr\Container\ContainerInterface` is reserved by the container:
 `$container->get(ContainerInterface::class)` always returns the container itself, and
-`Definitions` refuses to `set()` or `bind()` that id. This lets factories and
-infrastructure objects receive the container without ever knowing the concrete
-`Kaly\Di\Container`.
+`Definitions` refuses to declare it through any mutator (`set()`, `bind()`,
+`parameter()`, `callback()`). This lets factories and infrastructure objects receive
+the container without ever knowing the concrete `Kaly\Di\Container`.
 
 ## Shared vs Fresh
 

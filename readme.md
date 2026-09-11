@@ -19,7 +19,8 @@ Application code never needs to depend on a proprietary container API.
 - **No Attributes, No Magic:** plain PHP configuration, no attributes or compilation.
 - **Strongly Typed Definitions:** define dependencies in PHP for full IDE support.
 - **Autowiring:** concrete classes are resolved automatically; bind interfaces when needed.
-- **Explicit Lifecycle:** `get()` returns shared services, `make()` instantiates classes.
+- **Exact `has()`:** true only for internal entries, explicit definitions/bindings, or instantiable concrete classes.
+- **Explicit Lifecycle:** `Container::get()` returns shared services, `Injector::make()` instantiates fresh concrete classes.
 - **Developer Friendly:** typed error reporting and development-only assertions.
 
 ## Installation

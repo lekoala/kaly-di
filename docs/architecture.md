@@ -17,13 +17,14 @@ Injector ────────── standalone utility, depends only on Cont
 
 ## Core Components
 
-The library is composed of five main classes:
+The library is composed of six main classes:
 
 1. **`Container`**: The primary runtime entry point. Implements `Psr\Container\ContainerInterface`. It manages shared instances and orchestrates the building process. Its only public methods are `get()` and `has()`.
 2. **`Definitions`**: A fluent builder for container configuration (bindings, parameters, callbacks). Used at the composition root.
 3. **`Parameters`** *(internal)*: A static helper using Reflection to analyze callables and match types with container entries.
 4. **`Injector`**: A standalone utility for creating fresh instances and invoking callables. It depends only on PSR-11.
 5. **`ReflectionCache`** *(internal)*: Caches immutable reflection metadata (constructor signatures and class hierarchy) for the duration of the process.
+6. **`Reflection`** *(@api)*: Pure reflection helpers with no container dependency (`getParameterClass`, `getClassName`, `getShortClassName`, `getClassNamespace`). Safe to use anywhere.
 
 ## Design Decisions
 

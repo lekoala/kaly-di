@@ -71,6 +71,24 @@ Detailed guides are available in the `docs/` directory:
 - [**Injector**](./docs/injector.md): building fresh instances and invoking callables.
 - [**Architecture**](./docs/architecture.md): design decisions and the PSR-11 boundary.
 
+## Reflection Helpers
+
+Pure, dependency-free utilities live in `Kaly\Di\Reflection`:
+
+```php
+use Kaly\Di\Reflection;
+
+Reflection::getShortClassName($object); // e.g. "MyService"
+Reflection::getClassNamespace(MyService::class); // e.g. "App\Service"
+Reflection::getParameterClass($reflectionParameter); // ?ReflectionClass
+```
+
+Parameter resolution (`Parameters::resolveParameters()`, `valueMatchType()`,
+`flattenArguments()`) is the internal engine of `Container`/`Injector` and is
+deliberately not part of the public API: unlike the legacy permissive resolver,
+it never invents `''/0/false/[]` defaults and throws
+`UnresolvableParameterException` for required parameters that cannot be satisfied.
+
 ## A Note on Assertions
 
 Kaly DI distinguishes runtime guarantees from development-time validation:

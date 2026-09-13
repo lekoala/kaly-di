@@ -7,6 +7,7 @@ namespace Kaly\Tests;
 use Kaly\Di\ReflectionCache;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use ReflectionProperty;
 
 interface ReflectionCacheTestInterface1 {}
 
@@ -88,6 +89,20 @@ class ReflectionCacheTest extends TestCase
         $this->assertFalse(ReflectionCache::isInstantiable(ReflectionCacheTestAbstract::class));
         $this->assertFalse(ReflectionCache::isInstantiable(ReflectionCacheTestEnum::class));
         $this->assertFalse(ReflectionCache::isInstantiable('NonExistentClass'));
+    }
+
+    public function testClassHierarchyUnknownClassIsNotCached(): void
+    {
+        $unknown = 'NonExistentHierarchyClass';
+        $expected = ['interfaces' => [], 'parents' => []];
+
+        $this->assertSame($expected, ReflectionCache::classHierarchy($unknown));
+        $this->assertSame($expected, ReflectionCache::classHierarchy($unknown));
+
+        $prop = new ReflectionProperty(ReflectionCache::class, 'hierarchy');
+        $hierarchy = $prop->getValue();
+        $this->assertIsArray($hierarchy);
+        $this->assertArrayNotHasKey($unknown, $hierarchy);
     }
 
     public function testClear(): void

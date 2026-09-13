@@ -14,6 +14,9 @@ use ReflectionParameter;
  * constructor signature and its class hierarchy. Class existence is
  * deliberately NOT cached, so a negative lookup can never become stale.
  *
+ * For stateless, dependency-free helpers (class names, parameter class),
+ * see {@see Reflection} (public API).
+ *
  * @internal
  */
 final class ReflectionCache
@@ -32,6 +35,7 @@ final class ReflectionCache
      * @template T of object
      * @param class-string<T> $class
      * @return array{ReflectionClass<T>, ReflectionParameter[]}
+     * @throws \ReflectionException When the class does not exist
      */
     public static function reflection(string $class): array
     {
@@ -54,6 +58,10 @@ final class ReflectionCache
      */
     public static function classHierarchy(string $class): array
     {
+        // Never cache negative lookups: unknown names always resolve to empty
+        if (!class_exists($class) && !interface_exists($class) && !trait_exists($class)) {
+            return ['interfaces' => [], 'parents' => []];
+        }
         if (!array_key_exists($class, self::$hierarchy)) {
             $interfacesRaw = class_implements($class);
             $interfaces = is_array($interfacesRaw) ? $interfacesRaw : [];

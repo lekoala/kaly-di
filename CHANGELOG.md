@@ -67,6 +67,12 @@ rebind() is the only intentional replacement operation.
 - Mixed positional and named arguments (a positional prefix followed by named
   arguments, like a PHP call) are now supported and land on their parameter; a
   positional argument used to be silently dropped in that case.
+- **BC (internal):** `Parameters::resolveParameters()` now returns the final
+  positional `list<mixed>` ready for a Reflection call (variadic spread
+  included), instead of a mixed position/name keyed array that required a
+  separate `flattenArguments()` pass. `flattenArguments()` is removed;
+  `Injector::invoke()`, `Injector::make()` and `Container` consume the list
+  directly. The method remains internal (not part of the public API).
 
 ### Changed (container construction)
 
@@ -78,10 +84,11 @@ rebind() is the only intentional replacement operation.
   check inside `get()`, e.g. a failing autoloader) in a `ContainerException` with
   the original error as `previous`, so `get()` only throws PSR-11 exceptions. A
   direct `has()` call is not wrapped and surfaces the error as-is.
-- Failed resolutions leave no partial state: nothing is cached before configure()
-  runs, and the cycle guard only clears the marker of its own call, so the whole
-  factory + callback chain is safely replayed on the next `get()`. Factories and
-  callbacks must be idempotent.
+- Failed resolutions leave the failed service uncached: nothing is cached before
+  configure() runs, and the cycle guard only clears the marker of its own call,
+  so the next `get()` retries that service — factory included — and factories and
+  callbacks must be idempotent. There is no rollback of already-built
+  dependencies, side effects or provided instances.
 
 ### Fixed
 
@@ -89,6 +96,10 @@ rebind() is the only intentional replacement operation.
   (`set(A::class, B::class)` where `B` does not extend `A` and shares no
   interface with it) now run on the produced instance. Ids that are part of the
   instance hierarchy still run exactly once.
+- A named variadic argument whose array carries keys (e.g.
+  `['first' => 'a']`) no longer fails with an `ArgumentCountError` when
+  unpacked: keys are discarded (`array_values`) so the result stays a pure
+  list.
 
 ### Documentation
 
@@ -100,7 +111,10 @@ rebind() is the only intentional replacement operation.
 - Documented argument validation and the absence of general exception wrapping in
   the Injector ([docs/injector.md](./docs/injector.md)), definition locking at
   container construction ([docs/definitions.md](./docs/definitions.md)), and the
-  `has()`-inside-`get()` wrapping plus failure-replay guarantees
+  `has()`-inside-`get()` wrapping plus failure guarantees
   ([docs/architecture.md](./docs/architecture.md)).
+- Corrected the failure contract: a failed resolution leaves the failed service
+  uncached, but does not roll back already-built dependencies, side effects or
+  provided instances; the next `get()` retries only that service.
 
 See [docs/definitions.md](./docs/definitions.md) for details.

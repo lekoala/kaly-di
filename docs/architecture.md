@@ -146,8 +146,9 @@ unresolved required value
     => never invent or coerce a value
 
 failed resolution (factory, constructor, callback)
-    => nothing is cached
-    => safe to replay the whole build on the next get()
+    => the failed service is not cached
+    => the next get() retries that service; no rollback of
+       already-built dependencies, side effects or provided instances
 ```
 
 This contract is the acceptance criterion for future features: anything that would
@@ -211,14 +212,16 @@ autoloader throwing), the error surfaces as-is. Inside `get()`, the same check
 is wrapped in a `ContainerException` (original error as `previous`), so `get()`
 only ever throws PSR-11 exceptions.
 
-### Resolution failures leave no partial state
+### Resolution failures leave no partial state for the failed service
 
 Nothing is cached before the instance is fully built *and* configured: if a
-factory, a constructor or a callback throws, the resolution leaves no marker and
-no cached instance. The next `get()` replays the whole chain — factory included —
-so factories and callbacks must be idempotent. The cycle guard marks each call
-individually and only clears its own marker: a recursive call rejected by the
-guard never disturbs the outer call's marker.
+factory, a constructor or a callback throws, that service is not marked and not
+cached. The next `get()` retries its resolution — factory included — so factories
+and callbacks must be idempotent. There is no rollback of what the failed attempt
+already produced: dependencies built earlier in the chain stay cached, side
+effects persist, and an instance provided directly stays as it was left. The
+cycle guard marks each call individually and only clears its own marker: a
+recursive call rejected by the guard never disturbs the outer call's marker.
 
 ### No Attributes or Annotations
 

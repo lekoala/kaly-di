@@ -116,7 +116,8 @@ class Container implements ContainerInterface
             // Callbacks run only once since instances are cached
             $this->configure($instance, $id);
             // Nothing is cached before configure(): a failed resolution leaves
-            // no partial state and the whole build can be replayed safely.
+            // the failed service uncached (no rollback of already-built
+            // dependencies, side effects or provided instances).
             $this->instances[$id] = $instance;
 
             return $instance;
@@ -195,9 +196,8 @@ class Container implements ContainerInterface
 
         // Wrap any exception in a ContainerException
         try {
-            $flatArguments = Parameters::flattenArguments($constructorParameters, $arguments);
             /** @var object $instance */
-            $instance = $reflection->newInstanceArgs($flatArguments);
+            $instance = $reflection->newInstanceArgs($arguments);
         } catch (\Throwable $e) {
             $type = $e::class;
             throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
@@ -212,7 +212,7 @@ class Container implements ContainerInterface
      * @param string $id The service id being built
      * @param class-string $class The concrete class being instantiated
      * @param \ReflectionParameter[] $constructorParameters
-     * @return array<string,mixed>
+     * @return list<mixed>
      * @throws UnresolvableParameterException
      */
     private function resolveConstructorArguments(string $id, string $class, array $constructorParameters): array
@@ -239,7 +239,6 @@ class Container implements ContainerInterface
 
         // 2. Delegate final resolution (type-checks, defaults, nullability, auto-wiring) to Parameters
         try {
-            /** @var array<string,mixed> */
             return Parameters::resolveParameters($constructorParameters, $arguments, $this);
         } catch (UnresolvableParameterException $e) {
             // Rethrow with the exact Container error formatting, using the

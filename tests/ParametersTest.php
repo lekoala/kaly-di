@@ -37,10 +37,7 @@ class ParametersTest extends TestCase
             'dsn' => 'sqlite::memory:',
         ]);
 
-        $this->assertSame('sqlite::memory:', $parameters['dsn']);
-        $this->assertNull($parameters['username']);
-        $this->assertNull($parameters['password']);
-        $this->assertNull($parameters['options']);
+        $this->assertSame(['sqlite::memory:', null, null, null], $parameters);
     }
 
     public function testGetParameterTypes(): void
@@ -227,39 +224,15 @@ class ParametersTest extends TestCase
         $method = $reflection->getMethod('methodWithManyParams');
         $parameters = $method->getParameters();
 
-        // Test with named arguments
+        // Named arguments still produce the final positional list
         $arguments = ['param1' => 'test', 'param2' => 123, 'param3' => true];
         $resolved = Parameters::resolveParameters($parameters, $arguments);
-        $this->assertSame(
-            [
-                'param1' => 'test',
-                'param2' => 123,
-                'param3' => true,
-                'param4' => [],
-                'param5' => 0,
-                'param6' => false,
-                'param7' => null,
-                'param8' => null,
-            ],
-            $resolved,
-        );
+        $this->assertSame(['test', 123, true, [], 0, false, null, null], $resolved);
 
         // Return order is based on the actual signature, regardless of input order
         $arguments = ['param1' => 'test', 'param3' => true, 'param2' => 123];
         $resolved = Parameters::resolveParameters($parameters, $arguments);
-        $this->assertSame(
-            [
-                'param1' => 'test',
-                'param2' => 123,
-                'param3' => true,
-                'param4' => [],
-                'param5' => 0,
-                'param6' => false,
-                'param7' => null,
-                'param8' => null,
-            ],
-            $resolved,
-        );
+        $this->assertSame(['test', 123, true, [], 0, false, null, null], $resolved);
 
         // Unknown named arguments are rejected (before any resolution)
         $arguments = ['param1' => 'test', 'param2' => 123, 'param3' => true, 'extra' => 'extra'];
@@ -277,9 +250,8 @@ class ParametersTest extends TestCase
         // Positional prefix + named arguments, as in a PHP call
         $arguments = [0 => 'test', 1 => 123, 'param3' => true];
         $resolved = Parameters::resolveParameters($parameters, $arguments);
-        $flat = Parameters::flattenArguments($parameters, $resolved);
 
-        $this->assertSame(['test', 123, true, [], 0, false, null, null], $flat);
+        $this->assertSame(['test', 123, true, [], 0, false, null, null], $resolved);
     }
 
     public function testResolveParametersRejectsDoubleAssignment(): void
@@ -377,10 +349,8 @@ class ParametersTest extends TestCase
 
         // Test with container resolving
         $resolved = Parameters::resolveParameters($parameters, [], $container);
-        $this->assertArrayHasKey('param1', $resolved);
-        $this->assertInstanceOf(stdClass::class, $resolved['param1']);
-        $this->assertArrayHasKey('param2', $resolved);
-        $this->assertNull($resolved['param2']);
+        $this->assertInstanceOf(stdClass::class, $resolved[0]);
+        $this->assertNull($resolved[1]);
     }
 
     public function testResolveParametersProvidesTheCurrentContainer(): void
@@ -391,7 +361,7 @@ class ParametersTest extends TestCase
 
         $resolved = Parameters::resolveParameters($parameters, [], $container);
 
-        $this->assertSame($container, $resolved['c']);
+        $this->assertSame([$container], $resolved);
     }
 
     public function testResolveParametersWithoutContainerCannotResolveContainerInterface(): void
@@ -422,19 +392,22 @@ class ParametersTest extends TestCase
 
         $resolved = Parameters::resolveParameters($parameters, $arguments);
 
-        $expected = [
-            'param1' => 'value1',
-            'param2' => 101,
-            'param3' => true,
-            'param4' => [], // Default value
-            'param5' => 0, // Default value
-            'param6' => false, // Default value
-            'param7' => null, // Default value
-            'param8' => null, // Default value
-            'variadic' => ['var_a', 'var_b', 'var_c'],
-        ];
+        $this->assertSame(['value1', 101, true, [], 0, false, null, null, 'var_a', 'var_b', 'var_c'], $resolved);
+    }
 
-        $this->assertSame($expected, $resolved);
+    /**
+     * A named variadic array may carry keys (as from array_combine or a map):
+     * keys are discarded so the final list stays pure (no ArgumentCountError
+     * when unpacking into array_push/reflection).
+     */
+    public function testResolveParametersNamedVariadicWithAssociativeKeys(): void
+    {
+        $fn = fn(string ...$names): array => $names;
+        $parameters = (new ReflectionFunction($fn))->getParameters();
+
+        $resolved = Parameters::resolveParameters($parameters, ['names' => ['first' => 'a', 'second' => 'b']]);
+
+        $this->assertSame(['a', 'b'], $resolved);
     }
 
     /**
@@ -457,54 +430,5 @@ class ParametersTest extends TestCase
         $this->expectExceptionMessageMatches('/Variadic argument for parameter \$variadic must be an array/');
 
         Parameters::resolveParameters($parameters, $arguments);
-    }
-
-    public function testFlattenArguments(): void
-    {
-        $reflection = new ReflectionClass(ReflTestMock::class);
-        $method = $reflection->getMethod('methodWithManyParams');
-        $parameters = $method->getParameters();
-
-        // 1. All named arguments
-        $resolvedNamed = [
-            'param1' => 'v1',
-            'param2' => 2,
-            'param3' => true,
-            'param4' => [],
-            'param5' => 0,
-            'param6' => false,
-            'param7' => null,
-            'param8' => null,
-            'variadic' => ['a', 'b'],
-        ];
-        $flatNamed = Parameters::flattenArguments($parameters, $resolvedNamed);
-        $this->assertSame(['v1', 2, true, [], 0, false, null, null, 'a', 'b'], $flatNamed);
-
-        // 2. All positional arguments
-        $resolvedPositional = [
-            0 => 'v1',
-            1 => 2,
-            2 => true,
-            3 => [],
-            4 => 0,
-            5 => false,
-            6 => null,
-            7 => null,
-            8 => 'a',
-            9 => 'b',
-        ];
-        $flatPositional = Parameters::flattenArguments($parameters, $resolvedPositional);
-        $this->assertSame(['v1', 2, true, [], 0, false, null, null, 'a', 'b'], $flatPositional);
-
-        // 3. Empty arguments
-        $this->assertSame([], Parameters::flattenArguments([], []));
-
-        // 4. Variadic not as array in named
-        $resolvedNamedSingle = [
-            'param1' => 'v1',
-            'variadic' => 'single',
-        ];
-        $flatNamedSingle = Parameters::flattenArguments([$parameters[0], $parameters[8]], $resolvedNamedSingle);
-        $this->assertSame(['v1', 'single'], $flatNamedSingle);
     }
 }

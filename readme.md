@@ -86,14 +86,15 @@ Reflection::getClassNamespace(MyService::class); // e.g. "App\Service"
 Reflection::getParameterClass($reflectionParameter); // ?ReflectionClass
 ```
 
-Parameter resolution (`Parameters::resolveParameters()`, `valueMatchType()`,
-`flattenArguments()`) is the internal engine of `Container`/`Injector` and is
-deliberately not part of the public API: unlike the legacy permissive resolver,
-it never invents `''/0/false/[]` defaults and throws
-`UnresolvableParameterException` for required parameters that cannot be satisfied.
-Argument lists themselves are validated first: unknown named arguments, double
-assignments, surplus positionals and positional-after-named are rejected with an
-`InvalidArgumentException` before anything is resolved.
+Parameter resolution (`Parameters::resolveParameters()`, `valueMatchType()`)
+is the internal engine of `Container`/`Injector` and is deliberately not part
+of the public API: unlike the legacy permissive resolver, it never invents
+`''/0/false/[]` defaults and throws `UnresolvableParameterException` for
+required parameters that cannot be satisfied. `resolveParameters()` returns
+the final positional list ready for a Reflection call (variadic spread
+included). Argument lists themselves are validated first: unknown named
+arguments, double assignments, surplus positionals and positional-after-named
+are rejected with an `InvalidArgumentException` before anything is resolved.
 
 ## Configuration Errors, Assertions and Composition Tests
 

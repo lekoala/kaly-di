@@ -294,6 +294,16 @@ class InjectorTest extends TestCase
         $injector->invoke(function (...$names) {}, names: 'not-an-array');
     }
 
+    public function testInvokeNamedVariadicWithAssociativeKeys(): void
+    {
+        $injector = new Injector(new Container());
+
+        $this->assertSame(['a', 'b'], $injector->invoke(fn(string ...$names): array => $names, names: [
+            'first' => 'a',
+            'second' => 'b',
+        ]));
+    }
+
     public function testClosureCaching(): void
     {
         $injector = new Injector(new Container());

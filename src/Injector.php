@@ -78,8 +78,7 @@ final class Injector
      */
     private function invokeResolved(ReflectionFunction $reflection, array $parameters, array $arguments): mixed
     {
-        $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
-        $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
+        $flatArguments = Parameters::resolveParameters($parameters, $arguments, $this->container);
         return $reflection->invoke(...$flatArguments);
     }
 
@@ -107,8 +106,7 @@ final class Injector
             throw new InvalidArgumentException("`{$class}` is not instantiable");
         }
 
-        $resolvedParameters = Parameters::resolveParameters($parameters, $arguments, $this->container);
-        $flatArguments = Parameters::flattenArguments($parameters, $resolvedParameters);
+        $flatArguments = Parameters::resolveParameters($parameters, $arguments, $this->container);
 
         /** @var T */
         return $reflection->newInstanceArgs($flatArguments);

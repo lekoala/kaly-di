@@ -120,7 +120,7 @@ final class Definitions
      */
     public function merge(Definitions $definitions): self
     {
-        DefinitionGuard::assertNotLocked($this->locked);
+        $this->assertNotLocked();
 
         $incoming = $definitions->getValues();
         $incomingAliases = $definitions->getAliases();
@@ -275,7 +275,7 @@ final class Definitions
      */
     public function set(string $id, string|object $value, ?string $source = null): self
     {
-        DefinitionGuard::assertNotLocked($this->locked);
+        $this->assertNotLocked();
         DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $id);
         DefinitionGuard::assertUsableId($id);
         DefinitionGuard::assertValidDefinition($id, $value);
@@ -293,7 +293,7 @@ final class Definitions
      */
     public function bind(string $abstract, string $concrete, ?string $source = null): self
     {
-        DefinitionGuard::assertNotLocked($this->locked);
+        $this->assertNotLocked();
         DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $abstract);
         assert(interface_exists($abstract) || class_exists($abstract), "Abstraction `{$abstract}` does not exist");
         assert(class_exists($concrete), "Class `{$concrete}` does not exist");
@@ -317,7 +317,7 @@ final class Definitions
      */
     public function alias(string $alias, string $target): self
     {
-        DefinitionGuard::assertNotLocked($this->locked);
+        $this->assertNotLocked();
         DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $alias);
 
         if (!array_key_exists($target, $this->values) && !array_key_exists($target, $this->aliases)) {
@@ -399,7 +399,7 @@ final class Definitions
         string|object|null $expected = null,
         ?string $source = null,
     ): self {
-        DefinitionGuard::assertNotLocked($this->locked);
+        $this->assertNotLocked();
         if (!array_key_exists($id, $this->values)) {
             throw new DefinitionException(
                 "Cannot rebind `{$id}`: no existing definition was found. Define it first with set() or bind().",
@@ -438,7 +438,7 @@ final class Definitions
      */
     public function parameter(string $id, string $name, mixed $value): self
     {
-        DefinitionGuard::assertNotLocked($this->locked);
+        $this->assertNotLocked();
         DefinitionGuard::assertNotAlias($this->aliases, $id);
         $this->parameters[$id][$name] = $value;
         return $this;
@@ -450,7 +450,7 @@ final class Definitions
      */
     public function parameters(string $id, mixed ...$params): self
     {
-        DefinitionGuard::assertNotLocked($this->locked);
+        $this->assertNotLocked();
         foreach ($params as $k => $v) {
             $this->parameter($id, (string) $k, $v);
         }
@@ -488,7 +488,7 @@ final class Definitions
      */
     public function callback(string $id, Closure $fn, ?string $name = null): self
     {
-        DefinitionGuard::assertNotLocked($this->locked);
+        $this->assertNotLocked();
         DefinitionGuard::assertNotAlias($this->aliases, $id);
         // Use a stable, collision-free key so merging definitions never renumbers callbacks
         $name ??= (string) spl_object_id($fn);
@@ -547,5 +547,12 @@ final class Definitions
     public function isLocked(): bool
     {
         return $this->locked;
+    }
+
+    private function assertNotLocked(): void
+    {
+        if ($this->locked) {
+            throw new DefinitionException('Definitions are locked and cannot be modified.');
+        }
     }
 }

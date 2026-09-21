@@ -16,13 +16,6 @@ use Closure;
  */
 final class DefinitionGuard
 {
-    public static function assertNotLocked(bool $locked): void
-    {
-        if ($locked) {
-            throw new DefinitionException('Definitions are locked and cannot be modified.');
-        }
-    }
-
     /**
      * A given id can only be owned once, whether by a value or by an alias.
      *

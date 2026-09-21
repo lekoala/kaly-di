@@ -120,6 +120,21 @@ make(Foo::class)
     => missing object dependencies come from PSR-11
     => Definitions for Foo itself are not applied
 
+new service definition
+    => set() / bind()
+
+duplicate definition
+    => fail
+    => never silently override
+
+intentional replacement
+    => rebind()
+    => existing definition required
+
+merge()
+    => additive composition
+    => conflicts fail before mutation
+
 unresolved required value
     => fail
     => never invent or coerce a value

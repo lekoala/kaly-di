@@ -49,6 +49,10 @@ $definitions->set(LoggerInterface::class, function (ContainerInterface $c) {
 > `null` is not a valid definition. Concrete classes are already auto-wired, so a
 > `null` entry would add nothing.
 
+A service id can only be defined once. Setting or binding an id that is already
+defined throws a `LogicException`; use `rebind()` to replace it intentionally
+(see [Replacing a Definition](#replacing-a-definition)).
+
 ## Binding Abstractions
 
 Use `bind($abstract, $concrete)` to map an interface or an abstract class to a
@@ -153,19 +157,71 @@ $definitions->callback(MyService::class, function (MyService $service, Container
 
 ### Merging
 
-You can split your definitions across multiple files and merge them. Later values win.
+You can split your definitions across multiple files and merge them. Merging is
+**additive**: service definitions are never implicitly replaced. Merging two
+definitions that declare the same service id fails with a `LogicException`, even
+when both declare the exact same value: two modules that both declare a service
+own the same decision.
 
 ```php
 $definitions1 = Definitions::create()->set('repository', UserRepository::class);
 $definitions2 = Definitions::create()->set('mailer', Mailer::class);
-$definitions1->merge($definitions2);
+$definitions1->merge($definitions2); // ok: disjoint ids
 ```
+
+The check runs before anything is merged, so a failed `merge()` leaves the target
+definitions completely unchanged (services, parameters and callbacks alike).
+
+Parameters and callbacks keep their existing merge semantics (later values win
+per key): they customize a definition rather than choosing which implementation
+owns a service.
+
+### Replacing a Definition
+
+`rebind()` is the only operation that deliberately replaces an existing service
+definition. It requires the id to already be defined.
+
+```php
+$definitions = applicationDefinitions();
+
+// For a test, a demo, or a separate runtime: start from the real graph and
+// intentionally swap one service.
+$definitions->rebind(MailerInterface::class, FakeMailer::class);
+```
+
+`rebind()` accepts the same values as `set()` (class name, object, closure). When
+the id is an interface or an abstract class, the value is checked for
+compatibility whenever it is knowable without running user code: a class name or
+a concrete object must be compatible, while a closure stays free because its
+result is only known at execution time.
+
+```php
+$definitions->rebind(MailerInterface::class, FakeMailer::class);       // class name
+$definitions->rebind(ClockInterface::class, new FrozenClock($now));    // object
+$definitions->rebind(HttpClientInterface::class, fn (ContainerInterface $c) => new FakeHttpClient()); // closure
+```
+
+Rebinding an id that does not exist is an error, not a new definition: use
+`set()` or `bind()` for that.
+
+> `rebind()` changes the service for the whole container. It is intended for an
+> alternate composition, such as a test or a separate runtime. For one consumer
+> that needs a different dependency **inside the same container**, configure that
+> consumer explicitly instead:
+>
+> ```php
+> $definitions->parameter(
+>     MyService::class,
+>     'mailer',
+>     fn (ContainerInterface $c) => $c->get(FakeMailer::class),
+> );
+> ```
 
 ### Locking
 
 Once a `Definitions` object is locked, it cannot be modified. This prevents runtime
-changes to the container configuration. Any mutator (`set()`, `bind()`, `parameter()`,
-`parameters()`, `callback()`, `merge()`) then throws a `LogicException`.
+changes to the container configuration. Any mutator (`set()`, `bind()`, `rebind()`,
+`parameter()`, `parameters()`, `callback()`, `merge()`) then throws a `LogicException`.
 
 Locking is enforced at runtime, whether or not assertions are enabled, so the
 guarantee holds in production too.

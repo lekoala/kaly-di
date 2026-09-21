@@ -19,6 +19,7 @@ container itself.
 - **PSR-11 Compliance:** interoperable with PHP standards.
 - **No Attributes, No Magic:** plain PHP configuration, no attributes or compilation.
 - **Strongly Typed Definitions:** define dependencies in PHP for full IDE support.
+- **Fail-fast composition:** duplicate service definitions are rejected; intentional overrides use `rebind()`.
 - **Autowiring:** concrete classes are resolved automatically; bind interfaces when needed.
 - **Predictable `has()`:** true for explicit definitions/bindings or instantiable concrete classes; constructor resolution may still fail in `get()`.
 - **Explicit Lifecycle:** `Container::get()` returns shared services, `Injector::make()` instantiates fresh concrete classes.

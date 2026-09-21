@@ -74,13 +74,36 @@ final class Definitions
     }
 
     /**
-     * Merge another Definitions object into this one. Later values win.
+     * Merge another Definitions object into this one.
+     *
+     * Merging is additive: service definitions are never implicitly replaced.
+     * Any service id defined on both sides is a conflict, even when both sides
+     * declare the exact same value, because two modules would own the same
+     * decision. Conflicts are reported before anything is mutated, so a failed
+     * merge leaves this object completely unchanged.
+     *
+     * Parameters and callbacks keep their existing merge semantics (later
+     * values win per key), since they customize a definition rather than
+     * choosing which implementation owns a service.
      */
     public function merge(Definitions $definitions): void
     {
         $this->ensureNotLocked();
 
-        $this->values = array_replace($this->values, $definitions->getValues());
+        $incoming = $definitions->getValues();
+        $collisions = array_keys(array_intersect_key($this->values, $incoming));
+
+        if ($collisions !== []) {
+            sort($collisions);
+            $list = implode("\n", array_map(static fn(string $id): string => "- {$id}", $collisions));
+            throw new LogicException(
+                "Cannot merge definitions: the following service ids are already defined:\n{$list}\n"
+                . 'Merge is additive and never overrides services. '
+                . 'Use rebind() explicitly for intentional replacements.',
+            );
+        }
+
+        $this->values = array_replace($this->values, $incoming);
 
         foreach ($definitions->getCallbacks() as $key => $values) {
             $this->callbacks[$key] = array_replace($this->callbacks[$key] ?? [], $values);
@@ -169,9 +192,8 @@ final class Definitions
     public function set(string $id, string|object $value): self
     {
         $this->ensureNotLocked();
-        assert(is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
-        // Avoid resolving stdClass with the DI container
-        assert($id !== \stdClass::class, 'Cannot set stdClass as id');
+        $this->ensureNotDefined($id);
+        $this->assertValidDefinition($id, $value);
         $this->values[$id] = $value;
         return $this;
     }
@@ -185,10 +207,54 @@ final class Definitions
     public function bind(string $abstract, string $concrete): self
     {
         $this->ensureNotLocked();
+        $this->ensureNotDefined($abstract);
         assert(interface_exists($abstract) || class_exists($abstract), "Abstraction `{$abstract}` does not exist");
         assert(class_exists($concrete), "Class `{$concrete}` does not exist");
         assert(is_a($concrete, $abstract, true), "Class `{$concrete}` does not implement `{$abstract}`");
         $this->values[$abstract] = $concrete;
+        return $this;
+    }
+
+    /**
+     * Intentionally replace an existing service definition.
+     *
+     * This is the only operation that replaces a service, and it requires the
+     * id to already be defined. Unlike merge(), which is additive and fails on
+     * conflicts, rebind() expresses a deliberate substitution: an alternate
+     * composition for a test, a demo, or a separate runtime.
+     *
+     * It accepts the same value shapes as set() (class-string, object, closure).
+     * When the id is typed (an interface or an abstract class), the value is
+     * checked statically whenever its actual type is knowable without running
+     * user code: class-strings and concrete objects must be compatible, while
+     * closures stay free because their result is only known at execution time.
+     *
+     * rebind() changes the service for the whole container. For a single
+     * consumer that needs a different dependency in the same container,
+     * configure that consumer explicitly instead.
+     *
+     * @param class-string|object $value
+     */
+    public function rebind(string $id, string|object $value): self
+    {
+        $this->ensureNotLocked();
+        if (!array_key_exists($id, $this->values)) {
+            throw new LogicException(
+                "Cannot rebind `{$id}`: no existing definition was found. Define it first with set() or bind().",
+            );
+        }
+        $this->assertValidDefinition($id, $value);
+
+        if (interface_exists($id) || class_exists($id) && (new \ReflectionClass($id))->isAbstract()) {
+            if (is_string($value)) {
+                assert(is_a($value, $id, true), "Class `{$value}` does not implement `{$id}`");
+            } elseif (!$value instanceof Closure) {
+                $valueClass = $value::class;
+                assert($value instanceof $id, "Object `{$valueClass}` does not implement `{$id}`");
+            }
+        }
+
+        $this->values[$id] = $value;
         return $this;
     }
 
@@ -313,5 +379,27 @@ final class Definitions
         if ($this->locked) {
             throw new LogicException('Definitions are locked and cannot be modified.');
         }
+    }
+
+    /**
+     * Service definitions are additive: a given id can only be owned once.
+     */
+    private function ensureNotDefined(string $id): void
+    {
+        if (array_key_exists($id, $this->values)) {
+            throw new LogicException(
+                "Service `{$id}` is already defined. Use rebind() if replacing it is intentional.",
+            );
+        }
+    }
+
+    /**
+     * @param class-string|object $value
+     */
+    private function assertValidDefinition(string $id, string|object $value): void
+    {
+        assert(is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
+        // Avoid resolving stdClass with the DI container
+        assert($id !== \stdClass::class, 'Cannot set stdClass as id');
     }
 }

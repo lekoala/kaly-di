@@ -11,6 +11,7 @@ use Kaly\Di\Definitions;
 use Kaly\Di\Injector;
 use Kaly\Di\ReferenceNotFoundException;
 use Kaly\Di\UnresolvableParameterException;
+use Kaly\Tests\Mocks\TestAlternativeObject;
 use Kaly\Tests\Mocks\TestContainerAware;
 use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestNestedLeaf;
@@ -157,6 +158,29 @@ class ContractTest extends TestCase
         $this->assertInstanceOf(TestObject::class, $byId);
         $this->assertInstanceOf(TestObject::class, $byClass);
         $this->assertNotSame($byId, $byClass);
+    }
+
+    public function testDefinitionsCannotBeAccidentallyOverridden(): void
+    {
+        $app = Definitions::create()->bind(TestInterface::class, TestObject::class);
+
+        $overlay = Definitions::create()->bind(TestInterface::class, TestAlternativeObject::class);
+
+        $this->expectException(LogicException::class);
+        $this->expectExceptionMessage('rebind');
+
+        $app->merge($overlay);
+    }
+
+    public function testExistingDefinitionCanBeExplicitlyRebound(): void
+    {
+        $definitions = Definitions::create()
+            ->bind(TestInterface::class, TestObject::class)
+            ->rebind(TestInterface::class, TestAlternativeObject::class);
+
+        $container = $definitions->createContainer();
+
+        $this->assertInstanceOf(TestAlternativeObject::class, $container->get(TestInterface::class));
     }
 
     public function testAnAliasCanBeBuiltExplicitlyWithASetClosure(): void

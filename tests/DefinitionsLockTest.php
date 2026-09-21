@@ -21,10 +21,11 @@ class DefinitionsLockTest extends TestCase
             'parameters' => fn(Definitions $d) => $d->parameters('service', value: 1),
             'callback' => fn(Definitions $d) => $d->callback('service', fn() => null),
             'merge' => fn(Definitions $d) => $d->merge(new Definitions()),
+            'rebind' => fn(Definitions $d) => $d->rebind('service', TestObject::class),
         ];
 
         foreach ($mutators as $name => $mutator) {
-            $definitions = Definitions::create()->lock();
+            $definitions = Definitions::create()->set('service', TestObject::class)->lock();
             try {
                 $mutator($definitions);
                 $this->fail("{$name} must reject locked definitions");

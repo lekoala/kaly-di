@@ -171,4 +171,95 @@ class DefinitionsOverrideTest extends TestCase
         $this->assertSame(TestObject::class, $base->get('a'));
         $this->assertSame(TestObject2::class, $base->get('b'));
     }
+
+    public function testRebindWithMatchingExpectedReplacesDefinition(): void
+    {
+        $def = Definitions::create()->bind(TestInterface::class, TestObject::class);
+
+        $def->rebind(TestInterface::class, TestAlternativeObject::class, expected: TestObject::class);
+
+        $this->assertSame(TestAlternativeObject::class, $def->get(TestInterface::class));
+    }
+
+    public function testRebindWithMismatchedExpectedIsRejected(): void
+    {
+        $def = Definitions::create()->bind(TestInterface::class, TestObject::class);
+
+        try {
+            $def->rebind(TestInterface::class, TestAlternativeObject::class, expected: TestObject2::class);
+            $this->fail('A mismatched expected precondition must be rejected');
+        } catch (LogicException $e) {
+            $this->assertStringContainsString('expected', $e->getMessage());
+            $this->assertStringContainsString('currently defined', $e->getMessage());
+        }
+
+        $this->assertSame(TestObject::class, $def->get(TestInterface::class));
+    }
+
+    public function testRebindExpectedComparesObjectIdentityNotEquality(): void
+    {
+        $first = new TestAlternativeObject();
+        $second = new TestAlternativeObject();
+        $def = Definitions::create()->set('alternative', $first);
+
+        $def->rebind('alternative', $second, expected: $first);
+        $this->assertSame($second, $def->get('alternative'));
+
+        // A different instance of the same class is not the expected value
+        try {
+            $def->rebind('alternative', $first, expected: $first);
+            $this->fail('expected must compare identity, not class or equality');
+        } catch (LogicException $e) {
+            $this->assertStringContainsString('TestAlternativeObject#', $e->getMessage());
+        }
+    }
+
+    public function testRebindExpectedComparesClosureIdentity(): void
+    {
+        $factory = fn(): TestAlternativeObject => new TestAlternativeObject();
+        $otherFactory = fn(): TestAlternativeObject => new TestAlternativeObject();
+        $def = Definitions::create()->set('service', $factory);
+
+        $def->rebind('service', $otherFactory, expected: $factory);
+        $this->assertSame($otherFactory, $def->get('service'));
+
+        try {
+            $def->rebind('service', $factory, expected: $factory);
+            $this->fail('expected must compare closure identity');
+        } catch (LogicException $e) {
+            $this->assertStringContainsString('Closure#', $e->getMessage());
+        }
+    }
+
+    public function testRebindExpectedDetectsStaleOverride(): void
+    {
+        $def = Definitions::create()->bind(TestInterface::class, TestObject::class);
+
+        // Someone else changes the composition in between
+        $def->rebind(TestInterface::class, TestAlternativeObject::class);
+
+        try {
+            $def->rebind(TestInterface::class, TestObject::class, expected: TestObject::class);
+            $this->fail('A stale expected precondition must be rejected');
+        } catch (LogicException $e) {
+            $this->assertStringContainsString('expected', $e->getMessage());
+            $this->assertStringContainsString('currently defined', $e->getMessage());
+        }
+    }
+
+    public function testRebindExpectedTakesPrecedenceOverInvalidValue(): void
+    {
+        $def = Definitions::create()->bind(TestInterface::class, TestObject::class);
+
+        try {
+            // The precondition is stale AND the new value is incompatible:
+            // the stale precondition is reported first.
+            $def->rebind(TestInterface::class, TestObject2::class, expected: TestAlternativeObject::class);
+            $this->fail('A stale expected precondition must be rejected');
+        } catch (LogicException $e) {
+            $this->assertStringContainsString('expected', $e->getMessage());
+        }
+
+        $this->assertSame(TestObject::class, $def->get(TestInterface::class));
+    }
 }

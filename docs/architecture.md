@@ -130,6 +130,7 @@ duplicate definition
 intentional replacement
     => rebind()
     => existing definition required
+    => optional guard: expected current definition (identity)
 
 merge()
     => additive composition

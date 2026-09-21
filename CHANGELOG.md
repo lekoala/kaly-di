@@ -24,5 +24,9 @@ rebind() is the only intentional replacement operation.
 - `rebind($id, $value)` deliberately replaces an existing definition, and fails if
   the id does not exist. Parameters and callbacks keep their previous merge
   semantics.
+- `rebind()` accepts an optional `expected` precondition, turning a replacement
+  into a compare-and-swap: the id must still be defined exactly (strict identity)
+  as assumed, otherwise the call fails. This guards tests, demos and variants
+  against stale overrides.
 
 See [docs/definitions.md](./docs/definitions.md) for details.

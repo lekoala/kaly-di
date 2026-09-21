@@ -229,19 +229,41 @@ final class Definitions
      * user code: class-strings and concrete objects must be compatible, while
      * closures stay free because their result is only known at execution time.
      *
+     * An optional `expected` precondition turns rebind() into a
+     * compare-and-swap: the replacement only happens when the id is still
+     * defined exactly as the caller assumed. The comparison is strict identity
+     * (`!==`), never structural equality. This guards against stale overrides:
+     * when the main composition evolves, a test, demo, mock or CLI variant that
+     * relied on an old implementation fails immediately instead of silently
+     * keeping a wrong assumption.
+     *
+     * ```php
+     * $definitions->rebind(
+     *     StorageInterface::class,
+     *     InMemoryStorage::class,
+     *     expected: DatabaseStorage::class,
+     * );
+     * ```
+     *
      * rebind() changes the service for the whole container. For a single
      * consumer that needs a different dependency in the same container,
      * configure that consumer explicitly instead.
      *
      * @param class-string|object $value
+     * @param class-string|object|null $expected Guard: the id must currently be defined as this exact value
      */
-    public function rebind(string $id, string|object $value): self
+    public function rebind(string $id, string|object $value, string|object|null $expected = null): self
     {
         $this->ensureNotLocked();
         if (!array_key_exists($id, $this->values)) {
             throw new LogicException(
                 "Cannot rebind `{$id}`: no existing definition was found. Define it first with set() or bind().",
             );
+        }
+        if ($expected !== null && $this->values[$id] !== $expected) {
+            $current = $this->describeValue($this->values[$id]);
+            $wanted = $this->describeValue($expected);
+            throw new LogicException("Cannot rebind `{$id}`: expected `{$wanted}`, currently defined as `{$current}`.");
         }
         $this->assertValidDefinition($id, $value);
 
@@ -401,5 +423,24 @@ final class Definitions
         assert(is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
         // Avoid resolving stdClass with the DI container
         assert($id !== \stdClass::class, 'Cannot set stdClass as id');
+    }
+
+    /**
+     * Human-readable description of a definition value for error messages.
+     *
+     * Objects and closures include their instance id so that two distinct
+     * instances of the same class are not rendered identically.
+     *
+     * @param class-string|object $value
+     */
+    private function describeValue(string|object $value): string
+    {
+        if (is_string($value)) {
+            return $value;
+        }
+        if ($value instanceof Closure) {
+            return 'Closure#' . spl_object_id($value);
+        }
+        return $value::class . '#' . spl_object_id($value);
     }
 }

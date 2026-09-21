@@ -204,6 +204,37 @@ $definitions->rebind(HttpClientInterface::class, fn (ContainerInterface $c) => n
 Rebinding an id that does not exist is an error, not a new definition: use
 `set()` or `bind()` for that.
 
+#### Guarding a Replacement
+
+`rebind()` accepts an optional `expected` precondition. It then behaves as a
+compare-and-swap: the replacement only happens when the id is still defined
+*exactly* as the caller assumed.
+
+```php
+$definitions->rebind(
+    StorageInterface::class,
+    InMemoryStorage::class,
+    expected: DatabaseStorage::class,
+);
+```
+
+If the composition changed in the meantime, the call fails instead of silently
+building on a stale assumption:
+
+```text
+Cannot rebind `StorageInterface`: expected `DatabaseStorage`, currently defined as `CachedStorage`.
+```
+
+The comparison is strict identity (`!==`), never structural equality: a
+class-string is compared by value, and an object or a closure must be the very
+same instance. This is what makes the guard useful for a test, a demo, a mock, a
+CLI variant, or a package adapting a known composition: when the main
+configuration evolves, the override fails immediately instead of carrying an
+outdated hypothesis indefinitely. When the main implementation legitimately
+changes, the override is expected to break and be updated.
+
+Use the named `expected:` argument so the intent stays obvious at the call site.
+
 > `rebind()` changes the service for the whole container. It is intended for an
 > alternate composition, such as a test or a separate runtime. For one consumer
 > that needs a different dependency **inside the same container**, configure that

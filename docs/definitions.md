@@ -131,6 +131,22 @@ $definitions->parameter(
 The closure is resolved lazily when the object is instantiated, so it always sees the
 current state of the container.
 
+### Resolution Errors
+
+When a required parameter cannot be resolved, the message names the **immediate**
+parameter of the object being built (not the deepest one), and the full chain is
+available structurally:
+
+```text
+Unable to create object `App\Root`, cannot resolve parameter: `middle`
+Path: App\Root::$middle -> App\Middle::$leaf -> App\Leaf::$apiKey
+```
+
+`UnresolvableParameterException` exposes `getObjectId()`, `getParameterName()` and
+`getResolutionPath()`; the path is built from the cause chain, never parsed from
+messages. Only the outermost exception carries the complete path, inner ones carry
+their own suffix.
+
 ## Registering Callbacks
 
 Callbacks configure objects after they are instantiated.

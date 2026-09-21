@@ -10,6 +10,10 @@ All notable changes to this project are documented in this file.
   `zend.assertions`. It extends `LogicException` and implements the PSR-11
   `ContainerExceptionInterface`, since it can surface from `Container::get()`.
 - `merge()` now returns `$this`, so it chains like every other mutator.
+- `UnresolvableParameterException` now exposes `getObjectId()` and a structured
+  `getResolutionPath()`. Nested resolution messages name the immediate parameter
+  (`cannot resolve parameter: leaf`) and the outermost exception carries the full
+  path (`Root::$middle -> Middle::$leaf -> Leaf::$apiKey`).
 
 ### Changed (composition contract)
 

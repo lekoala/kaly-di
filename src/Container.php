@@ -213,14 +213,21 @@ class Container implements ContainerInterface
             /** @var array<string,mixed> */
             return Parameters::resolveParameters($constructorParameters, $arguments, $this);
         } catch (UnresolvableParameterException $e) {
-            // Rethrow with the exact Container error formatting, preserving both the
-            // failing parameter name and the original cause so a nested chain stays
-            // fully traceable: `A` -> `B` -> `C` -> Parameters.
+            // Rethrow with the exact Container error formatting. The immediate
+            // parameter name (not the nested one) and a structured path built
+            // from the cause chain keep the message faithful to the graph:
+            // `Root::$middle -> Middle::$leaf -> Leaf::$apiKey`.
             $parameterName = $e->getParameterName();
+            $segment = $parameterName !== null ? "{$id}::\${$parameterName}" : $id;
+            $nestedPath = $e->getResolutionPath();
+            $path = $nestedPath !== null ? "{$segment} -> {$nestedPath}" : $segment;
             $message = $parameterName !== null
-                ? "Unable to create object `{$id}`, missing parameter: `{$parameterName}`"
+                ? "Unable to create object `{$id}`, cannot resolve parameter: `{$parameterName}`"
                 : "Unable to create object `{$id}`: {$e->getMessage()}";
-            throw new UnresolvableParameterException($message, 0, $e, $parameterName);
+            if ($nestedPath !== null) {
+                $message .= "\nPath: {$path}";
+            }
+            throw new UnresolvableParameterException($message, 0, $e, $parameterName, $id, $path);
         } catch (CircularReferenceException $e) {
             // Rethrow circular reference exceptions as-is
             throw $e;

@@ -235,16 +235,21 @@ class ContractTest extends TestCase
             $di->get(TestNestedMiddle::class);
             $this->fail('Expected an UnresolvableParameterException');
         } catch (UnresolvableParameterException $e) {
-            $this->assertSame('apiKey', $e->getParameterName());
+            // The immediate parameter is reported, not the leaf's one
+            $this->assertSame('leaf', $e->getParameterName());
             $this->assertStringContainsString(TestNestedMiddle::class, $e->getMessage());
-            $this->assertStringContainsString('apiKey', $e->getMessage());
+            $this->assertStringContainsString('cannot resolve parameter: `leaf`', $e->getMessage());
+
+            $path = (string) $e->getResolutionPath();
+            $this->assertStringContainsString(TestNestedMiddle::class . '::$leaf', $path);
+            $this->assertStringContainsString(TestNestedLeaf::class . '::$apiKey', $path);
 
             $previous = $e->getPrevious();
             if (!$previous instanceof UnresolvableParameterException) {
                 $this->fail('Expected the previous exception to be an UnresolvableParameterException');
             }
-            $this->assertSame('apiKey', $previous->getParameterName());
-            $this->assertStringContainsString(TestNestedLeaf::class, $previous->getMessage());
+            $this->assertSame('leaf', $previous->getParameterName());
+            $this->assertStringContainsString(TestNestedLeaf::class, (string) $previous->getResolutionPath());
         }
     }
 
@@ -258,12 +263,19 @@ class ContractTest extends TestCase
         } catch (UnresolvableParameterException $e) {
             $chain = $this->exceptionChain($e);
 
-            $this->assertCount(4, $chain);
-            $this->assertSame('apiKey', $e->getParameterName());
+            $this->assertCount(6, $chain);
+            $this->assertSame('middle', $e->getParameterName());
             $this->assertStringContainsString(TestNestedRoot::class, $chain[0]->getMessage());
-            $this->assertStringContainsString(TestNestedMiddle::class, $chain[1]->getMessage());
-            $this->assertStringContainsString(TestNestedLeaf::class, $chain[2]->getMessage());
-            $this->assertStringContainsString('Cannot resolve required parameter', $chain[3]->getMessage());
+            $this->assertStringContainsString('cannot resolve parameter: `middle`', $chain[0]->getMessage());
+            $this->assertStringContainsString(TestNestedMiddle::class, $chain[2]->getMessage());
+            $this->assertStringContainsString(TestNestedLeaf::class, $chain[4]->getMessage());
+            $this->assertStringContainsString('Cannot resolve required parameter', $chain[5]->getMessage());
+
+            $path = (string) $e->getResolutionPath();
+            $this->assertStringContainsString(TestNestedRoot::class . '::$middle', $path);
+            $this->assertStringContainsString(TestNestedMiddle::class . '::$leaf', $path);
+            $this->assertStringContainsString(TestNestedLeaf::class . '::$apiKey', $path);
+            $this->assertStringContainsString('Path:', $e->getMessage());
         }
     }
 

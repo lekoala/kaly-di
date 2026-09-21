@@ -224,7 +224,7 @@ final class Parameters
             $name = $type->getName();
             if ($container) {
                 if ($container->has($name)) {
-                    return $container->get($name);
+                    return ParameterResolution::fromContainer($parameter, $name, $container);
                 }
                 // The resolver can always provide itself to a parameter typed
                 // exactly `ContainerInterface`. This is a resolver capability,

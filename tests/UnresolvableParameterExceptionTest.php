@@ -39,4 +39,14 @@ class UnresolvableParameterExceptionTest extends TestCase
         $exceptionNoParam = new UnresolvableParameterException('msg');
         $this->assertNull($exceptionNoParam->getParameterName());
     }
+
+    public function testItCanStoreAndRetrieveObjectIdAndResolutionPath(): void
+    {
+        $exception = new UnresolvableParameterException('msg', 0, null, 'leaf', 'App\\Root', 'App\\Root::$leaf');
+
+        $this->assertSame('App\\Root', $exception->getObjectId());
+        $this->assertSame('App\\Root::$leaf', $exception->getResolutionPath());
+        $this->assertNull((new UnresolvableParameterException())->getObjectId());
+        $this->assertNull((new UnresolvableParameterException())->getResolutionPath());
+    }
 }

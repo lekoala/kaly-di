@@ -16,7 +16,7 @@
         "carthage-software/mago": "^1",
         "composer/ca-bundle": "^1.5",
         "phpstan/phpstan": "^2.2",
-        "phpunit/phpunit": "^11"
+        "phpunit/phpunit": "^12.5"
     },
     "autoload": {
         "psr-4": {

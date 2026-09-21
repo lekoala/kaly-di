@@ -355,7 +355,7 @@ class ParametersTest extends TestCase
 
     public function testResolveParametersProvidesTheCurrentContainer(): void
     {
-        $container = $this->createMock(Container::class);
+        $container = $this->createStub(Container::class);
         $fn = fn(ContainerInterface $c): ContainerInterface => $c;
         $parameters = (new ReflectionFunction($fn))->getParameters();
 

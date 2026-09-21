@@ -8,6 +8,7 @@ use AssertionError;
 use InvalidArgumentException;
 use Kaly\Di\Container;
 use Kaly\Di\Parameters;
+use Kaly\Di\TypeMatcher;
 use Kaly\Di\UnresolvableParameterException;
 use Kaly\Tests\Mocks\ReflTestMock;
 use Kaly\Tests\Mocks\ReflTestMockObject;
@@ -73,64 +74,64 @@ class ParametersTest extends TestCase
         $this->assertInstanceOf(ReflectionIntersectionType::class, $types[0]);
     }
 
-    public function testValueMatchTypeBuiltins(): void
+    public function testTypeMatcherBuiltins(): void
     {
         $reflection = new ReflectionClass(ReflTestMock::class);
         $method = $reflection->getMethod('methodWithBuiltinTypes');
         $params = $method->getParameters();
 
         // mixed
-        $this->assertTrue(Parameters::valueMatchType(1, $params[0]->getType()));
-        $this->assertTrue(Parameters::valueMatchType('test', $params[0]->getType()));
+        $this->assertTrue(TypeMatcher::matches(1, $params[0]->getType()));
+        $this->assertTrue(TypeMatcher::matches('test', $params[0]->getType()));
 
         // iterable
-        $this->assertTrue(Parameters::valueMatchType([], $params[1]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(1, $params[1]->getType()));
+        $this->assertTrue(TypeMatcher::matches([], $params[1]->getType()));
+        $this->assertFalse(TypeMatcher::matches(1, $params[1]->getType()));
 
         // callable
-        $this->assertTrue(Parameters::valueMatchType(function () {}, $params[2]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(1, $params[2]->getType()));
+        $this->assertTrue(TypeMatcher::matches(function () {}, $params[2]->getType()));
+        $this->assertFalse(TypeMatcher::matches(1, $params[2]->getType()));
 
         // object
-        $this->assertTrue(Parameters::valueMatchType(new stdClass(), $params[3]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(1, $params[3]->getType()));
+        $this->assertTrue(TypeMatcher::matches(new stdClass(), $params[3]->getType()));
+        $this->assertFalse(TypeMatcher::matches(1, $params[3]->getType()));
 
         // bool
-        $this->assertTrue(Parameters::valueMatchType(true, $params[4]->getType()));
-        $this->assertTrue(Parameters::valueMatchType(false, $params[4]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(1, $params[4]->getType()));
+        $this->assertTrue(TypeMatcher::matches(true, $params[4]->getType()));
+        $this->assertTrue(TypeMatcher::matches(false, $params[4]->getType()));
+        $this->assertFalse(TypeMatcher::matches(1, $params[4]->getType()));
 
         // int
-        $this->assertTrue(Parameters::valueMatchType(1, $params[5]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(1.1, $params[5]->getType()));
+        $this->assertTrue(TypeMatcher::matches(1, $params[5]->getType()));
+        $this->assertFalse(TypeMatcher::matches(1.1, $params[5]->getType()));
 
         // float (int is widened to float, like PHP does)
-        $this->assertTrue(Parameters::valueMatchType(1.1, $params[6]->getType()));
-        $this->assertTrue(Parameters::valueMatchType(1, $params[6]->getType()));
-        $this->assertFalse(Parameters::valueMatchType('1', $params[6]->getType()));
+        $this->assertTrue(TypeMatcher::matches(1.1, $params[6]->getType()));
+        $this->assertTrue(TypeMatcher::matches(1, $params[6]->getType()));
+        $this->assertFalse(TypeMatcher::matches('1', $params[6]->getType()));
 
         // string
-        $this->assertTrue(Parameters::valueMatchType('test', $params[7]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(1, $params[7]->getType()));
+        $this->assertTrue(TypeMatcher::matches('test', $params[7]->getType()));
+        $this->assertFalse(TypeMatcher::matches(1, $params[7]->getType()));
 
         // array
-        $this->assertTrue(Parameters::valueMatchType([], $params[8]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(1, $params[8]->getType()));
+        $this->assertTrue(TypeMatcher::matches([], $params[8]->getType()));
+        $this->assertFalse(TypeMatcher::matches(1, $params[8]->getType()));
 
         // false
-        $this->assertTrue(Parameters::valueMatchType(false, $params[9]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(true, $params[9]->getType()));
+        $this->assertTrue(TypeMatcher::matches(false, $params[9]->getType()));
+        $this->assertFalse(TypeMatcher::matches(true, $params[9]->getType()));
 
         // true
-        $this->assertTrue(Parameters::valueMatchType(true, $params[10]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(false, $params[10]->getType()));
+        $this->assertTrue(TypeMatcher::matches(true, $params[10]->getType()));
+        $this->assertFalse(TypeMatcher::matches(false, $params[10]->getType()));
 
         // null
-        $this->assertTrue(Parameters::valueMatchType(null, $params[11]->getType()));
-        $this->assertFalse(Parameters::valueMatchType(1, $params[11]->getType()));
+        $this->assertTrue(TypeMatcher::matches(null, $params[11]->getType()));
+        $this->assertFalse(TypeMatcher::matches(1, $params[11]->getType()));
     }
 
-    public function testValueMatchType(): void
+    public function testTypeMatcherMatches(): void
     {
         $reflection = new ReflectionClass(ReflTestMock::class);
         $method = $reflection->getMethod('someMethod');
@@ -140,47 +141,47 @@ class ParametersTest extends TestCase
         $type = $param->getType();
         $this->assertInstanceOf(ReflectionUnionType::class, $type);
 
-        $this->assertTrue(Parameters::valueMatchType('test', $type));
-        $this->assertTrue(Parameters::valueMatchType(123, $type));
-        $this->assertFalse(Parameters::valueMatchType(true, $type));
+        $this->assertTrue(TypeMatcher::matches('test', $type));
+        $this->assertTrue(TypeMatcher::matches(123, $type));
+        $this->assertFalse(TypeMatcher::matches(true, $type));
 
         // Test with no type
         $param = $method->getParameters()[1];
         $type = $param->getType();
         $this->assertNull($type);
-        $this->assertTrue(Parameters::valueMatchType('test', $type));
-        $this->assertTrue(Parameters::valueMatchType(123, $type));
-        $this->assertTrue(Parameters::valueMatchType(true, $type));
-        $this->assertTrue(Parameters::valueMatchType(null, $type));
+        $this->assertTrue(TypeMatcher::matches('test', $type));
+        $this->assertTrue(TypeMatcher::matches(123, $type));
+        $this->assertTrue(TypeMatcher::matches(true, $type));
+        $this->assertTrue(TypeMatcher::matches(null, $type));
 
         // Test with named type
         $param = $method->getParameters()[2];
         $type = $param->getType();
         $this->assertInstanceOf(ReflectionNamedType::class, $type);
-        $this->assertTrue(Parameters::valueMatchType(new stdClass(), $type));
-        $this->assertFalse(Parameters::valueMatchType('test', $type));
+        $this->assertTrue(TypeMatcher::matches(new stdClass(), $type));
+        $this->assertFalse(TypeMatcher::matches('test', $type));
 
         // Test with named type + null
         $param = $method->getParameters()[4];
         $type = $param->getType();
         $this->assertInstanceOf(ReflectionNamedType::class, $type);
-        $this->assertTrue(Parameters::valueMatchType(new stdClass(), $type));
-        $this->assertTrue(Parameters::valueMatchType(null, $type));
-        $this->assertFalse(Parameters::valueMatchType('test', $type));
+        $this->assertTrue(TypeMatcher::matches(new stdClass(), $type));
+        $this->assertTrue(TypeMatcher::matches(null, $type));
+        $this->assertFalse(TypeMatcher::matches('test', $type));
 
         // Test with named type + builtin
         $param = $method->getParameters()[5];
         $type = $param->getType();
         $this->assertInstanceOf(ReflectionNamedType::class, $type);
-        $this->assertTrue(Parameters::valueMatchType(123, $type));
-        $this->assertFalse(Parameters::valueMatchType('test', $type));
+        $this->assertTrue(TypeMatcher::matches(123, $type));
+        $this->assertFalse(TypeMatcher::matches('test', $type));
 
         // Test with IntersectionType
         $param = $method->getParameters()[3];
         $type = $param->getType();
         $this->assertInstanceOf(ReflectionIntersectionType::class, $type);
-        $this->assertTrue(Parameters::valueMatchType(new ReflTestMockObject(), $type));
-        $this->assertFalse(Parameters::valueMatchType(new stdClass(), $type));
+        $this->assertTrue(TypeMatcher::matches(new ReflTestMockObject(), $type));
+        $this->assertFalse(TypeMatcher::matches(new stdClass(), $type));
     }
 
     public function testResolveParametersPositional(): void
@@ -298,6 +299,25 @@ class ParametersTest extends TestCase
         $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessageMatches('/Positional arguments must be provided before named/');
         Parameters::resolveParameters($parameters, ['param1' => 'test', 0 => 'other']);
+    }
+
+    public function testInvalidArgumentsNeverTouchTheContainer(): void
+    {
+        $fn = fn(string $a, string $b): string => $a . $b;
+        $parameters = (new ReflectionFunction($fn))->getParameters();
+
+        $container = $this->createMock(Container::class);
+        $container->expects($this->never())->method('has');
+        $container->expects($this->never())->method('get');
+
+        // Unknown named argument, surplus positional and double assignment at
+        // once: rejected up front, before any dependency resolution
+        $this->expectException(InvalidArgumentException::class);
+        Parameters::resolveParameters(
+            $parameters,
+            [0 => 'x', 1 => 'y', 2 => 'z', 'a' => 'dup', 'unknown' => 'u'],
+            $container,
+        );
     }
 
     public function testArgumentValidationWorksWithAssertionsDisabled(): void

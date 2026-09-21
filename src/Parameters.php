@@ -15,13 +15,7 @@ use ReflectionUnionType;
 /**
  * Helper class to deal with parameters resolution.
  *
- * Resolution is always strict: a required parameter that cannot be satisfied
- * (by an explicit argument, the container, a default value or null) throws an
- * UnresolvableParameterException.
- *
- * Provided arguments are normalized and validated in one preliminary step,
- * before any dependency is resolved, and resolveParameters() returns the final
- * positional list ready for a Reflection call (variadic spread included).
+ * See resolveParameters() for the resolution contract.
  */
 final class Parameters
 {
@@ -49,21 +43,12 @@ final class Parameters
     }
 
     /**
-     * Checks value compatibility against potentially complex PHP type hints
-     * (nullable, union, intersection, class/interface, built-in)
-     *
-     * @param mixed $value
-     * @param ReflectionType|null $type
-     * @return bool
-     */
-    public static function valueMatchType(mixed $value, ?ReflectionType $type): bool
-    {
-        return TypeMatcher::matches($value, $type);
-    }
-
-    /**
      * Resolve constructor/callable arguments into a final positional list,
      * ready to be unpacked for a Reflection call (variadic spread included).
+     *
+     * Resolution is always strict: a required parameter that cannot be
+     * satisfied (by an explicit argument, the container, a default value or
+     * null) throws an UnresolvableParameterException.
      *
      * Provided arguments are normalized and validated before any dependency is
      * resolved: unknown named arguments, surplus positional arguments, double
@@ -121,14 +106,9 @@ final class Parameters
     }
 
     /**
-     * Single preliminary step: split, validate and normalize the provided
-     * arguments into a table of provided values keyed by parameter name, plus
-     * the variadic values as a pure list. Runs entirely before any container
-     * access.
-     *
-     * Structural checks are unconditional (not assert-based): they hold in
-     * production too, so a bad call never reaches a factory or a container
-     * lookup.
+     * Split, validate and normalize the provided arguments into provided
+     * values keyed by parameter name, plus the variadic values as a pure
+     * list. Runs entirely before any container access.
      *
      * @param \ReflectionParameter[] $parameters
      * @param array<mixed> $arguments
@@ -138,7 +118,23 @@ final class Parameters
     private static function normalizeArguments(array $parameters, array $arguments): array
     {
         [$positional, $named] = self::partitionArguments($arguments);
-        self::validateArguments($parameters, $positional, $named);
+
+        $count = count($parameters);
+        $hasVariadic = $count > 0 && $parameters[$count - 1]->isVariadic();
+        $fixedCount = $hasVariadic ? $count - 1 : $count;
+        $positionalCount = count($positional);
+
+        // Preliminary checks: unknown named arguments, then surplus positionals
+        self::assertNoUnknownNamedArguments($parameters, $named);
+        if (!$hasVariadic && $positionalCount > $fixedCount) {
+            throw new InvalidArgumentException(
+                'Too many positional arguments: expected at most '
+                . $fixedCount
+                . ', got '
+                . $positionalCount
+                . ' (the callable has no variadic parameter).',
+            );
+        }
 
         $provided = [];
         $variadicValues = [];
@@ -148,18 +144,30 @@ final class Parameters
             $paramName = $parameter->getName();
 
             if ($parameter->isVariadic()) {
+                if ($positionalCount > $fixedCount && array_key_exists($paramName, $named)) {
+                    throw new InvalidArgumentException(
+                        "Variadic parameter `{$paramName}` is provided both positionally and by name.",
+                    );
+                }
                 $variadicValues = array_key_exists($paramName, $named)
                     ? self::namedVariadicValue($paramName, $named[$paramName])
                     : array_slice($positional, $position);
                 if ($paramType instanceof ReflectionNamedType) {
                     foreach ($variadicValues as $value) {
                         assert(
-                            self::valueMatchType($value, $paramType),
+                            TypeMatcher::matches($value, $paramType),
                             "parameter `{$paramName}` doesn't support " . get_debug_type($value),
                         );
                     }
                 }
                 continue;
+            }
+
+            // Reject a double assignment, then normalize the value
+            if ($position < $positionalCount && array_key_exists($paramName, $named)) {
+                throw new InvalidArgumentException(
+                    "Parameter `{$paramName}` is provided both positionally (index {$position}) and by name.",
+                );
             }
 
             if (array_key_exists($position, $positional)) {
@@ -171,13 +179,41 @@ final class Parameters
             }
 
             assert(
-                self::valueMatchType($value, $paramType),
+                TypeMatcher::matches($value, $paramType),
                 "parameter `{$paramName}` doesn't support " . get_debug_type($value),
             );
             $provided[$paramName] = $value;
         }
 
         return [$provided, $variadicValues];
+    }
+
+    /**
+     * Reject named arguments that match no parameter.
+     *
+     * @param \ReflectionParameter[] $parameters
+     * @param array<string, mixed> $named
+     * @throws InvalidArgumentException
+     */
+    private static function assertNoUnknownNamedArguments(array $parameters, array $named): void
+    {
+        $available = [];
+        foreach ($parameters as $parameter) {
+            $available[] = $parameter->getName();
+        }
+        $unknown = array_values(array_diff(array_keys($named), $available));
+        if ($unknown === []) {
+            return;
+        }
+
+        sort($unknown);
+        throw new InvalidArgumentException(
+            'Unknown named argument(s): '
+            . implode(', ', array_map(static fn(string $name): string => "`{$name}`", $unknown))
+            . '. Available: '
+            . implode(', ', array_map(static fn(string $name): string => "`{$name}`", $available))
+            . '.',
+        );
     }
 
     /**
@@ -210,73 +246,6 @@ final class Parameters
     }
 
     /**
-     * Structural checks on the provided arguments, run before any dependency
-     * is resolved. Unconditional (not assert-based): they hold in production
-     * too, so a bad call never reaches a factory or a container lookup.
-     *
-     * @param \ReflectionParameter[] $parameters
-     * @param list<mixed> $positional
-     * @param array<string, mixed> $named
-     * @throws InvalidArgumentException
-     */
-    private static function validateArguments(array $parameters, array $positional, array $named): void
-    {
-        $count = count($parameters);
-        $hasVariadic = $count > 0 && $parameters[$count - 1]->isVariadic();
-        $fixedCount = $hasVariadic ? $count - 1 : $count;
-
-        // 1. Unknown named arguments
-        $available = [];
-        foreach ($parameters as $parameter) {
-            $available[] = $parameter->getName();
-        }
-        $unknown = array_values(array_diff(array_keys($named), $available));
-        if ($unknown !== []) {
-            sort($unknown);
-            throw new InvalidArgumentException(
-                'Unknown named argument(s): '
-                . implode(', ', array_map(static fn(string $name): string => "`{$name}`", $unknown))
-                . '. Available: '
-                . implode(', ', array_map(static fn(string $name): string => "`{$name}`", $available))
-                . '.',
-            );
-        }
-
-        // 2. Double assignments: the same parameter passed positionally and by name
-        foreach ($parameters as $parameter) {
-            if ($parameter->isVariadic()) {
-                break;
-            }
-            $position = $parameter->getPosition();
-            $name = $parameter->getName();
-            if ($position < count($positional) && array_key_exists($name, $named)) {
-                throw new InvalidArgumentException(
-                    "Parameter `{$name}` is provided both positionally (index {$position}) and by name.",
-                );
-            }
-        }
-        if ($hasVariadic) {
-            $variadicName = $parameters[$count - 1]->getName();
-            if (count($positional) > $fixedCount && array_key_exists($variadicName, $named)) {
-                throw new InvalidArgumentException(
-                    "Variadic parameter `{$variadicName}` is provided both positionally and by name.",
-                );
-            }
-        }
-
-        // 3. Surplus positional arguments with no variadic to absorb them
-        if (!$hasVariadic && count($positional) > $fixedCount) {
-            throw new InvalidArgumentException(
-                'Too many positional arguments: expected at most '
-                . $fixedCount
-                . ', got '
-                . count($positional)
-                . ' (the callable has no variadic parameter).',
-            );
-        }
-    }
-
-    /**
      * A named variadic argument carries the whole list as a single array value.
      * Keys are discarded so the result is a pure list (PHP would otherwise see
      * named arguments when unpacking into array_push/reflection calls).
@@ -301,13 +270,11 @@ final class Parameters
         ReflectionParameter $parameter,
         ?ContainerInterface $container,
     ): mixed {
-        // Resolve using the container for any valid type
         $types = self::getParameterTypes($parameter);
         foreach ($types as $type) {
             if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
                 continue;
             }
-            // The container must use the class or interface name as id
             $name = $type->getName();
             if ($container) {
                 if ($container->has($name)) {
@@ -323,12 +290,10 @@ final class Parameters
             }
         }
 
-        // Use code-provided default
         if ($parameter->isDefaultValueAvailable()) {
             return $parameter->getDefaultValue();
         }
 
-        // It allows null
         if ($parameter->allowsNull()) {
             return null;
         }
@@ -378,7 +343,6 @@ final class Parameters
 
     private static function reflectionTypeToString(?ReflectionType $type): string
     {
-        // Reflection types have __toString magic method which is usually sufficient
         return $type === null ? 'mixed' : (string) $type;
     }
 }

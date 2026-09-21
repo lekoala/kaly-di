@@ -86,7 +86,7 @@ Reflection::getClassNamespace(MyService::class); // e.g. "App\Service"
 Reflection::getParameterClass($reflectionParameter); // ?ReflectionClass
 ```
 
-Parameter resolution (`Parameters::resolveParameters()`, `valueMatchType()`)
+Parameter resolution (`Parameters::resolveParameters()`)
 is the internal engine of `Container`/`Injector` and is deliberately not part
 of the public API: unlike the legacy permissive resolver, it never invents
 `''/0/false/[]` defaults and throws `UnresolvableParameterException` for

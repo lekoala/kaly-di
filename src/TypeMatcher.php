@@ -13,9 +13,6 @@ use ReflectionUnionType;
  * Checks value compatibility against potentially complex PHP type hints
  * (nullable, union, intersection, class/interface, built-in).
  *
- * Keeping this out of Parameters keeps that class below the complexity
- * threshold; it is an implementation detail.
- *
  * @internal
  */
 final class TypeMatcher
@@ -27,7 +24,6 @@ final class TypeMatcher
      */
     public static function matches(mixed $value, ?ReflectionType $type): bool
     {
-        // If no type is provided, it's valid
         if ($type === null) {
             return true;
         }
@@ -43,35 +39,27 @@ final class TypeMatcher
     private static function matchUnionType(mixed $value, ReflectionUnionType $type): bool
     {
         foreach ($type->getTypes() as $t) {
-            // For Union: Return true on the first match
             if (self::matches($value, $t)) {
                 return true;
             }
         }
-        // If loop completes, no type matched
         return false;
     }
 
     private static function matchIntersectionType(mixed $value, ReflectionIntersectionType $type): bool
     {
         foreach ($type->getTypes() as $t) {
-            // For Intersection: Return false on the first non-match
             if (!self::matches($value, $t)) {
                 return false;
             }
         }
-        // If loop completes, all types matched (and ReflectionIntersectionType must have types)
         return true;
     }
 
     private static function matchNamedType(mixed $value, ReflectionNamedType $type): bool
     {
-        if ($type->allowsNull() && $value === null) {
-            return true;
-        }
-        // If value is null but type doesn't allow null, fail early
         if ($value === null) {
-            return false;
+            return $type->allowsNull();
         }
         if ($type->isBuiltin()) {
             $typeName = $type->getName();
@@ -87,7 +75,6 @@ final class TypeMatcher
                 default => get_debug_type($value) === $typeName,
             };
         }
-        // Check if value is an object before calling is_a
         if (is_object($value)) {
             // works for instances or interfaces
             return is_a($value, $type->getName());

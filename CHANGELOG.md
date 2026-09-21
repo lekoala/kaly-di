@@ -77,7 +77,8 @@ rebind() is the only intentional replacement operation.
 ### Changed (container construction)
 
 - Creating a container locks the `Definitions` it receives (`lock()` is
-  idempotent; `createContainer()` already locked them). Mutating definitions
+  idempotent; `createContainer()` relies on the Container constructor for
+  locking). Mutating definitions
   after a container was built from them now always fails with a
   `DefinitionException`.
 - `Container::get()` wraps any error raised while checking existence (the `has()`
@@ -89,6 +90,11 @@ rebind() is the only intentional replacement operation.
   so the next `get()` retries that service — factory included — and factories and
   callbacks must be idempotent. There is no rollback of already-built
   dependencies, side effects or provided instances.
+
+### Changed (internal)
+
+- Simplification of invocation and argument resolution; the internal helper
+  `Parameters::valueMatchType()` is removed.
 
 ### Fixed
 

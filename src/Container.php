@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Kaly\Di;
 
 use Closure;
-use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 
@@ -58,7 +57,7 @@ class Container implements ContainerInterface
             $definitions = new Definitions($definitions ?? []);
         }
         // Locking is idempotent: once the composition root has a container,
-        // definitions must not change anymore (createContainer() locks first).
+        // definitions must not change anymore.
         $definitions->lock();
         $this->definitions = $definitions;
     }
@@ -93,7 +92,6 @@ class Container implements ContainerInterface
             return $this->instances[$id] ??= $this->get((string) $this->definitions->getAlias($id));
         }
 
-        // Return cached instance
         if (array_key_exists($id, $this->instances)) {
             return $this->instances[$id];
         }
@@ -217,7 +215,7 @@ class Container implements ContainerInterface
      */
     private function resolveConstructorArguments(string $id, string $class, array $constructorParameters): array
     {
-        // 1. Gather explicitly defined parameters for this class/id
+        // Gather explicitly defined parameters for this class/id
         $configured = $this->definitions->allParametersFor($class, $id);
         $this->assertKnownParameters($id, $class, $configured, $constructorParameters);
 
@@ -237,22 +235,16 @@ class Container implements ContainerInterface
             $arguments[$paramName] = $paramValue;
         }
 
-        // 2. Delegate final resolution (type-checks, defaults, nullability, auto-wiring) to Parameters
+        // Final resolution (type-checks, defaults, nullability, auto-wiring).
+        // Only UnresolvableParameterException needs handling here: it gains the
+        // structured path. Anything else propagates to get(), which already
+        // preserves Kaly exceptions and wraps the rest.
         try {
             return Parameters::resolveParameters($constructorParameters, $arguments, $this);
         } catch (UnresolvableParameterException $e) {
             // Rethrow with the exact Container error formatting, using the
             // immediate parameter name (not the nested one).
             throw $this->wrapUnresolvableParameter($e, $id, $e->getParameterName());
-        } catch (CircularReferenceException $e) {
-            // Rethrow circular reference exceptions as-is
-            throw $e;
-        } catch (ContainerExceptionInterface $e) {
-            // Already formatted by a nested resolution: do not wrap it again
-            throw $e;
-        } catch (\Throwable $e) {
-            $type = $e::class;
-            throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
         }
     }
 

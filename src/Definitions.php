@@ -215,14 +215,13 @@ final class Definitions
     }
 
     /**
-     * Create a container from these definitions and lock them.
+     * Create a container from these definitions.
      *
-     * This is a terminal method in the fluent chain. After calling it,
-     * the definitions are locked and cannot be modified further.
+     * This is a terminal method in the fluent chain. The Container constructor
+     * locks the definitions, so they cannot be modified further afterwards.
      */
     public function createContainer(): Container
     {
-        $this->lock();
         return new Container($this);
     }
 

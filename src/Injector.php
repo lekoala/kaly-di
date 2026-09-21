@@ -42,44 +42,22 @@ final class Injector
      */
     public function invoke(callable $callable, ...$arguments)
     {
-        if ($callable instanceof Closure) {
-            return $this->invokeClosure($callable, $arguments);
-        }
-        return $this->invokeCallable($callable, $arguments);
+        $closure = $callable instanceof Closure ? $callable : Closure::fromCallable($callable);
+        [$reflection, $parameters] = $this->reflect($closure);
+        $flatArguments = Parameters::resolveParameters($parameters, $arguments, $this->container);
+        return $reflection->invoke(...$flatArguments);
     }
 
     /**
-     * @param array<mixed> $arguments
+     * @return array{0: ReflectionFunction, 1: array<\ReflectionParameter>}
      */
-    private function invokeClosure(Closure $closure, array $arguments): mixed
+    private function reflect(Closure $closure): array
     {
         if (!$this->callableCache->offsetExists($closure)) {
             $reflection = new ReflectionFunction($closure);
             $this->callableCache[$closure] = [$reflection, $reflection->getParameters()];
         }
-        [$reflection, $parameters] = $this->callableCache[$closure];
-        return $this->invokeResolved($reflection, $parameters, $arguments);
-    }
-
-    /**
-     * @param array<mixed> $arguments
-     */
-    private function invokeCallable(callable $callable, array $arguments): mixed
-    {
-        $closure = Closure::fromCallable($callable);
-        $reflection = new ReflectionFunction($closure);
-        $parameters = $reflection->getParameters();
-        return $this->invokeResolved($reflection, $parameters, $arguments);
-    }
-
-    /**
-     * @param array<\ReflectionParameter> $parameters
-     * @param array<mixed> $arguments
-     */
-    private function invokeResolved(ReflectionFunction $reflection, array $parameters, array $arguments): mixed
-    {
-        $flatArguments = Parameters::resolveParameters($parameters, $arguments, $this->container);
-        return $reflection->invoke(...$flatArguments);
+        return $this->callableCache[$closure];
     }
 
     /**

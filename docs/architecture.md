@@ -45,6 +45,69 @@ Every service requested through `Container::get()` is cached and therefore share
 For a fresh instance of a concrete class, use `Injector::make()`, which does not read
 Kaly definitions and does not populate the container cache.
 
+### The resolution contract
+
+Resolution is intentionally predictable: Kaly DI does not guess dependencies or
+lifecycle beyond what was explicitly requested.
+
+```text
+get(Foo::class)
+    => resolve Foo as a container service
+    => configured by Definitions
+    => shared for this Container instance
+
+make(Foo::class)
+    => instantiate a fresh concrete Foo
+    => explicit arguments win
+    => missing object dependencies come from PSR-11
+    => Definitions for Foo itself are not applied
+
+unresolved required value
+    => fail
+    => never invent or coerce a value
+```
+
+This contract is the acceptance criterion for future features: anything that would
+require guessing a dependency, a scope or a lifecycle is out of scope unless it is
+explicitly configured. The corresponding user-visible invariants are locked by
+`tests/ContractTest.php`.
+
+### Container lifetime
+
+A container's lifetime is the lifetime of its shared services: every entry returned
+by `get()` is cached for as long as the container instance lives.
+
+For a long-running worker, a single container can serve the whole process:
+
+```php
+$container = new Container($definitions);
+
+// get() services stay shared for the lifetime of this container
+```
+
+For request isolation, create a new container per request:
+
+```php
+foreach ($requests as $request) {
+    $container = new Container($definitions);
+    // each container owns its own cache of shared services
+}
+```
+
+`ReflectionCache` is process-wide: recreating a container does not throw away the
+reflection cost, it only resets the service cache.
+
+The same `Definitions` object can be shared by several containers. Whether an entry
+is shared *between* those containers depends on how it was declared:
+
+```php
+// an object is stored in Definitions: shared between all containers built from them
+$definitions->set(Foo::class, new Foo());
+
+// a factory closure produces one instance per container, at first get()
+$definitions->set(Foo::class, fn () => new Foo());
+```
+
 ### `has()` is exact
 
 `Container::has($id)` returns true only when the container can actually provide the

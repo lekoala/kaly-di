@@ -17,6 +17,7 @@ use Kaly\Tests\Mocks\TestObject5;
 use Kaly\Tests\Mocks\TestObject5Parent;
 use Kaly\Tests\Mocks\TestObject6;
 use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
 
 class InjectorTest extends TestCase
 {
@@ -160,6 +161,36 @@ class InjectorTest extends TestCase
         $inst = $injector->make(TestObject6::class, v: 'a', v2: 'b', arr: []);
 
         $this->assertInstanceOf(TestObject6::class, $inst);
+    }
+
+    /**
+     * make() is a root-level constructor, not an independent recursive autowirer:
+     * a missing object dependency is resolved through the PSR-11 container only,
+     * without a Kaly-style recursive fallback.
+     */
+    public function testMakeDoesNotRecursivelyAutowireWithAStrictPsr11Container(): void
+    {
+        $strict = new class implements ContainerInterface {
+            public function get(string $id): mixed
+            {
+                throw new \RuntimeException("not found: {$id}");
+            }
+
+            public function has(string $id): bool
+            {
+                return false;
+            }
+        };
+
+        $injector = new Injector($strict);
+
+        try {
+            $injector->make(TestObject5Parent::class);
+            $this->fail('Expected an UnresolvableParameterException');
+        } catch (UnresolvableParameterException $e) {
+            $this->assertSame('v', $e->getParameterName());
+            $this->assertStringContainsString(TestObject5::class, $e->getMessage());
+        }
     }
 
     public function testMakeDoesNotUseContainerDefinitionsForTheRootClass(): void

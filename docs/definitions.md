@@ -62,6 +62,36 @@ $definitions->bind(AbstractHandler::class, LoggingHandler::class);
 The concrete class must be compatible with the abstraction. Configuration stays
 explicit: there is no "single interface" auto-detection.
 
+`bind()` means **"when `$abstract` is requested, build `$concrete` for this id"**. It
+does not mean "`$abstract` is an alias of the `$concrete` entry". The two ids are
+resolved and cached independently:
+
+```php
+$definitions->bind(FooInterface::class, Foo::class);
+
+$a = $container->get(FooInterface::class);
+$b = $container->get(Foo::class);
+
+$a === $b; // false: two distinct shared instances
+```
+
+When you actually want an alias, express it explicitly with a factory that returns
+the target service:
+
+```php
+use Psr\Container\ContainerInterface;
+
+$definitions->set(
+    FooInterface::class,
+    fn (ContainerInterface $c) => $c->get(Foo::class),
+);
+
+$container->get(FooInterface::class) === $container->get(Foo::class); // true
+```
+
+There is deliberately no `alias()` API: if the pattern becomes common in real
+applications, it will be added based on actual usage.
+
 ## Setting Parameters
 
 You can explicitly provide values for constructor parameters.

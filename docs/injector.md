@@ -55,6 +55,43 @@ $injector->make(MyService::class, apiKey: 'explicit');
 $container->get(MyService::class);
 ```
 
+## The Injector Is Not a Recursive Autowirer
+
+`make()` performs **fresh root instantiation**, not an independent recursive object
+graph autowiring strategy. Object dependencies of the root class are resolved through
+the provided PSR-11 container; if that container cannot provide one, resolution fails
+instead of being autowired by the Injector itself.
+
+With `Kaly\Di\Container` this is transparent, because concrete autowirable classes are
+reported by `has()`. With a strict third-party PSR-11 container that only exposes its
+own explicit entries, a missing object dependency is an error:
+
+```php
+use Psr\Container\ContainerInterface;
+
+$strict = new class implements ContainerInterface {
+    public function get(string $id): mixed
+    {
+        throw new \RuntimeException("not found: {$id}");
+    }
+
+    public function has(string $id): bool
+    {
+        return false;
+    }
+};
+
+$injector = new Injector($strict);
+
+// MyService requires a Foo object dependency that $strict does not provide
+$injector->make(MyService::class, apiKey: 'secret');
+// => UnresolvableParameterException, no recursive fallback
+```
+
+This keeps the distinction between a shared service (`get()`) and a fresh object
+(`make()`) unambiguous. Either register the missing dependencies in the container, or
+pass them explicitly.
+
 ## Calling Functions
 
 You can invoke any PHP callable (closures, method arrays, etc.) and let the injector

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kaly\Di;
 
 use Closure;
+use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 
@@ -216,12 +217,19 @@ class Container implements ContainerInterface
             /** @var array<string,mixed> */
             return Parameters::resolveParameters($constructorParameters, $arguments, $this);
         } catch (UnresolvableParameterException $e) {
-            // Rethrow with the exact Container error formatting
-            throw new UnresolvableParameterException(
-                "Unable to create object `{$id}`, missing parameter: `{$e->getParameterName()}`",
-            );
+            // Rethrow with the exact Container error formatting, preserving both the
+            // failing parameter name and the original cause so a nested chain stays
+            // fully traceable: `A` -> `B` -> `C` -> Parameters.
+            $parameterName = $e->getParameterName();
+            $message = $parameterName !== null
+                ? "Unable to create object `{$id}`, missing parameter: `{$parameterName}`"
+                : "Unable to create object `{$id}`: {$e->getMessage()}";
+            throw new UnresolvableParameterException($message, 0, $e, $parameterName);
         } catch (CircularReferenceException $e) {
             // Rethrow circular reference exceptions as-is
+            throw $e;
+        } catch (ContainerExceptionInterface $e) {
+            // Already formatted by a nested resolution: do not wrap it again
             throw $e;
         } catch (\Throwable $e) {
             $type = $e::class;

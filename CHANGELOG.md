@@ -10,6 +10,10 @@ All notable changes to this project are documented in this file.
   `zend.assertions`. It extends `LogicException` and implements the PSR-11
   `ContainerExceptionInterface`, since it can surface from `Container::get()`.
 - `merge()` now returns `$this`, so it chains like every other mutator.
+- `alias($alias, $target)`: an explicit alias whose `get()` delegates to its
+  target. The target is configured once (unlike a factory returning another entry,
+  which runs its callbacks again). Aliases cannot carry parameters or callbacks,
+  and alias cycles are rejected.
 - `UnresolvableParameterException` now exposes `getObjectId()` and a structured
   `getResolutionPath()`. Nested resolution messages name the immediate parameter
   (`cannot resolve parameter: leaf`) and the outermost exception carries the full

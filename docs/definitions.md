@@ -79,22 +79,22 @@ $b = $container->get(Foo::class);
 $a === $b; // false: two distinct shared instances
 ```
 
-When you actually want an alias, express it explicitly with a factory that returns
-the target service:
+When you actually want an alias, use `alias()`:
 
 ```php
-use Psr\Container\ContainerInterface;
-
-$definitions->set(
-    FooInterface::class,
-    fn (ContainerInterface $c) => $c->get(Foo::class),
-);
+$definitions->alias(FooInterface::class, Foo::class);
 
 $container->get(FooInterface::class) === $container->get(Foo::class); // true
 ```
 
-There is deliberately no `alias()` API: if the pattern becomes common in real
-applications, it will be added based on actual usage.
+`get(alias)` delegates to `get(target)`: the target is built and configured
+exactly once. The target must already be defined (a value or another alias).
+Aliases cannot carry their own parameters or callbacks, and alias cycles are
+rejected.
+
+> A factory that returns another entry still works, but it is **not** an alias:
+> the returned object is configured again for the alias id, so its callbacks run a
+> second time. Use `alias()` when you want a true alias.
 
 ## Setting Parameters
 

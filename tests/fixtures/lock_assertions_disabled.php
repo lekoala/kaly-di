@@ -21,6 +21,7 @@ $mutators = [
     'callback' => fn(Definitions $d) => $d->callback('service', fn() => null),
     'merge' => fn(Definitions $d) => $d->merge(new Definitions()),
     'rebind' => fn(Definitions $d) => $d->rebind('service', TestObject::class),
+    'alias' => fn(Definitions $d) => $d->alias('alias', 'service'),
 ];
 
 foreach ($mutators as $name => $mutator) {

@@ -43,6 +43,17 @@ final class Definitions
     private array $values = [];
 
     /**
+     * Alias map: alias id => target id.
+     *
+     * An alias delegates resolution to its target: get(alias) returns
+     * get(target), configured once. Aliases cannot carry parameters or
+     * callbacks of their own.
+     *
+     * @var array<string,string>
+     */
+    private array $aliases = [];
+
+    /**
      * Defines callbacks to be called after an object is instantiated
      *
      * @var array<string,array<string|int,Closure>>
@@ -98,10 +109,17 @@ final class Definitions
      */
     public function merge(Definitions $definitions): self
     {
-        $this->ensureNotLocked();
+        DefinitionGuard::assertNotLocked($this->locked);
 
         $incoming = $definitions->getValues();
-        $collisions = array_keys(array_intersect_key($this->values, $incoming));
+        $incomingAliases = $definitions->getAliases();
+
+        $currentIds = array_fill_keys([...array_keys($this->values), ...array_keys($this->aliases)], true);
+        $incomingIds = [...array_keys($incoming), ...array_keys($incomingAliases)];
+        $collisions = array_values(array_filter($incomingIds, static fn(string $id): bool => array_key_exists(
+            $id,
+            $currentIds,
+        )));
 
         if ($collisions !== []) {
             sort($collisions);
@@ -113,15 +131,26 @@ final class Definitions
             );
         }
 
-        $this->values = array_replace($this->values, $incoming);
+        // Build the whole result first: a failed merge must leave this object untouched.
+        $values = array_replace($this->values, $incoming);
+        $aliases = array_replace($this->aliases, $incomingAliases);
 
-        foreach ($definitions->getCallbacks() as $key => $values) {
-            $this->callbacks[$key] = array_replace($this->callbacks[$key] ?? [], $values);
+        $callbacks = $this->callbacks;
+        foreach ($definitions->getCallbacks() as $key => $entries) {
+            $callbacks[$key] = array_replace($callbacks[$key] ?? [], $entries);
         }
 
-        foreach ($definitions->getParameters() as $key => $values) {
-            $this->parameters[$key] = array_replace($this->parameters[$key] ?? [], $values);
+        $parameters = $this->parameters;
+        foreach ($definitions->getParameters() as $key => $entries) {
+            $parameters[$key] = array_replace($parameters[$key] ?? [], $entries);
         }
+
+        AliasValidator::assertValid($values, $aliases, $parameters, $callbacks);
+
+        $this->values = $values;
+        $this->aliases = $aliases;
+        $this->callbacks = $callbacks;
+        $this->parameters = $parameters;
 
         return $this;
     }
@@ -163,11 +192,11 @@ final class Definitions
     }
 
     /**
-     * Check if an id has an explicit definition
+     * Check if an id has an explicit definition or is an alias
      */
     public function has(string $id): bool
     {
-        return array_key_exists($id, $this->values);
+        return array_key_exists($id, $this->values) || array_key_exists($id, $this->aliases);
     }
 
     /**
@@ -210,10 +239,10 @@ final class Definitions
      */
     public function set(string $id, string|object $value): self
     {
-        $this->ensureNotLocked();
-        $this->ensureNotDefined($id);
-        $this->ensureUsableId($id);
-        $this->assertValidDefinition($id, $value);
+        DefinitionGuard::assertNotLocked($this->locked);
+        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $id);
+        DefinitionGuard::assertUsableId($id);
+        DefinitionGuard::assertValidDefinition($id, $value);
         $this->values[$id] = $value;
         return $this;
     }
@@ -226,13 +255,65 @@ final class Definitions
      */
     public function bind(string $abstract, string $concrete): self
     {
-        $this->ensureNotLocked();
-        $this->ensureNotDefined($abstract);
+        DefinitionGuard::assertNotLocked($this->locked);
+        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $abstract);
         assert(interface_exists($abstract) || class_exists($abstract), "Abstraction `{$abstract}` does not exist");
         assert(class_exists($concrete), "Class `{$concrete}` does not exist");
         assert(is_a($concrete, $abstract, true), "Class `{$concrete}` does not implement `{$abstract}`");
         $this->values[$abstract] = $concrete;
         return $this;
+    }
+
+    /**
+     * Make an id an alias of an existing definition.
+     *
+     * get(alias) returns get(target): the same shared instance, configured
+     * once. This is the explicit alternative to a factory that returns another
+     * entry, which would run the target's callbacks a second time for the alias
+     * id.
+     *
+     * The target must already be defined (a value or another alias). Aliases
+     * cannot carry their own parameters or callbacks, and alias cycles are
+     * rejected.
+     */
+    public function alias(string $alias, string $target): self
+    {
+        DefinitionGuard::assertNotLocked($this->locked);
+        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $alias);
+
+        if (!array_key_exists($target, $this->values) && !array_key_exists($target, $this->aliases)) {
+            throw new DefinitionException(
+                "Cannot alias `{$alias}` to `{$target}`: no existing definition was found. Define it first with set() or bind().",
+            );
+        }
+        AliasValidator::assertHasNoOwnConfiguration($alias, $this->parameters, $this->callbacks);
+        if (AliasValidator::wouldCycle($this->aliases, $alias, $target)) {
+            throw new DefinitionException("Cannot alias `{$alias}` to `{$target}`: that would create an alias cycle.");
+        }
+
+        $this->aliases[$alias] = $target;
+        return $this;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    public function getAliases(): array
+    {
+        return $this->aliases;
+    }
+
+    public function hasAlias(string $id): bool
+    {
+        return array_key_exists($id, $this->aliases);
+    }
+
+    /**
+     * Target of an alias, or null when the id is not an alias.
+     */
+    public function getAlias(string $id): ?string
+    {
+        return $this->aliases[$id] ?? null;
     }
 
     /**
@@ -274,25 +355,28 @@ final class Definitions
      */
     public function rebind(string $id, string|object $value, string|object|null $expected = null): self
     {
-        $this->ensureNotLocked();
+        DefinitionGuard::assertNotLocked($this->locked);
         if (!array_key_exists($id, $this->values)) {
             throw new DefinitionException(
                 "Cannot rebind `{$id}`: no existing definition was found. Define it first with set() or bind().",
             );
         }
         if ($expected !== null && $this->values[$id] !== $expected) {
-            $current = $this->describeValue($this->values[$id]);
-            $wanted = $this->describeValue($expected);
+            $current = DefinitionGuard::describeValue($this->values[$id]);
+            $wanted = DefinitionGuard::describeValue($expected);
             throw new DefinitionException(
                 "Cannot rebind `{$id}`: expected `{$wanted}`, currently defined as `{$current}`.",
             );
         }
-        $this->ensureUsableId($id);
-        $this->assertValidDefinition($id, $value);
+        DefinitionGuard::assertUsableId($id);
+        DefinitionGuard::assertValidDefinition($id, $value);
 
         // Development-only: is a typed id bound to a compatible value? The whole
         // check lives inside assert() so isTypedId() never autoloads in production.
-        assert($this->isCompatibleReplacement($id, $value), $this->replacementMismatch($id, $value));
+        assert(
+            DefinitionGuard::isCompatibleReplacement($id, $value),
+            DefinitionGuard::replacementMismatch($id, $value),
+        );
 
         $this->values[$id] = $value;
         return $this;
@@ -305,7 +389,8 @@ final class Definitions
      */
     public function parameter(string $id, string $name, mixed $value): self
     {
-        $this->ensureNotLocked();
+        DefinitionGuard::assertNotLocked($this->locked);
+        DefinitionGuard::assertNotAlias($this->aliases, $id);
         $this->parameters[$id][$name] = $value;
         return $this;
     }
@@ -316,7 +401,7 @@ final class Definitions
      */
     public function parameters(string $id, mixed ...$params): self
     {
-        $this->ensureNotLocked();
+        DefinitionGuard::assertNotLocked($this->locked);
         foreach ($params as $k => $v) {
             $this->parameter($id, (string) $k, $v);
         }
@@ -354,7 +439,8 @@ final class Definitions
      */
     public function callback(string $id, Closure $fn, ?string $name = null): self
     {
-        $this->ensureNotLocked();
+        DefinitionGuard::assertNotLocked($this->locked);
+        DefinitionGuard::assertNotAlias($this->aliases, $id);
         // Use a stable, collision-free key so merging definitions never renumbers callbacks
         $name ??= (string) spl_object_id($fn);
         $this->callbacks[$id][$name] = $fn;
@@ -412,113 +498,5 @@ final class Definitions
     public function isLocked(): bool
     {
         return $this->locked;
-    }
-
-    private function ensureNotLocked(): void
-    {
-        if ($this->locked) {
-            throw new DefinitionException('Definitions are locked and cannot be modified.');
-        }
-    }
-
-    /**
-     * Service definitions are additive: a given id can only be owned once.
-     */
-    private function ensureNotDefined(string $id): void
-    {
-        if (array_key_exists($id, $this->values)) {
-            throw new DefinitionException(
-                "Service `{$id}` is already defined. Use rebind() if replacing it is intentional.",
-            );
-        }
-    }
-
-    /**
-     * Reject ids that would collide with a resolved stdClass value.
-     *
-     * A cheap, unconditional configuration invariant: no autoloading or
-     * reflection is required.
-     */
-    private function ensureUsableId(string $id): void
-    {
-        if ($id === \stdClass::class) {
-            throw new DefinitionException('Cannot set stdClass as id');
-        }
-    }
-
-    /**
-     * Development assertion: the value is an object or an existing class name.
-     *
-     * class_exists() may autoload the class, so this check must not run in
-     * production for services the runtime never visits. assertValidDefinition
-     * is therefore an assertion, not a runtime guarantee.
-     *
-     * @param class-string|object $value
-     */
-    private function assertValidDefinition(string $id, string|object $value): void
-    {
-        assert(is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
-    }
-
-    /**
-     * Development assertion helper: is a rebind() value compatible with a typed
-     * id? Closures are free (their result is only known at execution time) and
-     * untyped ids accept anything. Only called from assert(), so isTypedId()
-     * never autoloads in production.
-     *
-     * @param class-string|object $value
-     */
-    private function isCompatibleReplacement(string $id, string|object $value): bool
-    {
-        if ($value instanceof Closure || !$this->isTypedId($id)) {
-            return true;
-        }
-        return is_string($value) ? is_a($value, $id, true) : $value instanceof $id;
-    }
-
-    /**
-     * Diagnostic for a failed isCompatibleReplacement() assertion.
-     *
-     * @param class-string|object $value
-     */
-    private function replacementMismatch(string $id, string|object $value): string
-    {
-        if (is_string($value)) {
-            return "Class `{$value}` does not implement `{$id}`";
-        }
-        if ($value instanceof Closure) {
-            return "Closure does not implement `{$id}`";
-        }
-        $valueClass = $value::class;
-        return "Object `{$valueClass}` does not implement `{$id}`";
-    }
-
-    /**
-     * Whether an id denotes an interface or an abstract class.
-     *
-     * May autoload, so it is only ever reached from within assert().
-     */
-    private function isTypedId(string $id): bool
-    {
-        return interface_exists($id) || class_exists($id) && (new \ReflectionClass($id))->isAbstract();
-    }
-
-    /**
-     * Human-readable description of a definition value for error messages.
-     *
-     * Objects and closures include their instance id so that two distinct
-     * instances of the same class are not rendered identically.
-     *
-     * @param class-string|object $value
-     */
-    private function describeValue(string|object $value): string
-    {
-        if (is_string($value)) {
-            return $value;
-        }
-        if ($value instanceof Closure) {
-            return 'Closure#' . spl_object_id($value);
-        }
-        return $value::class . '#' . spl_object_id($value);
     }
 }

@@ -76,6 +76,11 @@ class Container implements ContainerInterface
             throw new ReferenceNotFoundException("`{$id}` is not set");
         }
 
+        // An alias delegates to its target: same instance, configured once.
+        if ($this->definitions->hasAlias($id)) {
+            return $this->instances[$id] ??= $this->get((string) $this->definitions->getAlias($id));
+        }
+
         // Return cached instance
         if (array_key_exists($id, $this->instances)) {
             return $this->instances[$id];

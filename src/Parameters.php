@@ -54,81 +54,27 @@ final class Parameters
      */
     public static function valueMatchType(mixed $value, ?ReflectionType $type): bool
     {
-        // If no type is provided, it's valid
-        if ($type === null) {
-            return true;
-        }
-
-        return match (true) {
-            $type instanceof ReflectionUnionType => self::matchUnionType($value, $type),
-            $type instanceof ReflectionIntersectionType => self::matchIntersectionType($value, $type),
-            $type instanceof ReflectionNamedType => self::matchNamedType($value, $type),
-            default => false,
-        };
-    }
-
-    private static function matchUnionType(mixed $value, ReflectionUnionType $type): bool
-    {
-        foreach ($type->getTypes() as $t) {
-            // For Union: Return true on the first match
-            if (self::valueMatchType($value, $t)) {
-                return true;
-            }
-        }
-        // If loop completes, no type matched
-        return false;
-    }
-
-    private static function matchIntersectionType(mixed $value, ReflectionIntersectionType $type): bool
-    {
-        foreach ($type->getTypes() as $t) {
-            // For Intersection: Return false on the first non-match
-            if (!self::valueMatchType($value, $t)) {
-                return false;
-            }
-        }
-        // If loop completes, all types matched (and ReflectionIntersectionType must have types)
-        return true;
-    }
-
-    private static function matchNamedType(mixed $value, ReflectionNamedType $type): bool
-    {
-        if ($type->allowsNull() && $value === null) {
-            return true;
-        }
-        // If value is null but type doesn't allow null, fail early
-        if ($value === null) {
-            return false;
-        }
-        if ($type->isBuiltin()) {
-            $typeName = $type->getName();
-            return match ($typeName) {
-                'mixed' => true,
-                'iterable' => is_iterable($value),
-                'callable' => is_callable($value),
-                'object' => is_object($value),
-                'false' => $value === false,
-                'true' => $value === true,
-                // PHP allows widening int to float
-                'float' => is_float($value) || is_int($value),
-                default => get_debug_type($value) === $typeName,
-            };
-        }
-        // Check if value is an object before calling is_a
-        if (is_object($value)) {
-            // works for instances or interfaces
-            return is_a($value, $type->getName());
-        }
-
-        return false;
+        return TypeMatcher::matches($value, $type);
     }
 
     /**
      * Resolve constructor/callable arguments.
      *
+     * Provided arguments are validated structurally before any dependency is
+     * resolved: unknown named arguments, surplus positional arguments, double
+     * assignments (the same parameter passed positionally and by name) and the
+     * shape of a named variadic all throw an InvalidArgumentException up front.
+     * A typo therefore cannot surface as a misleading
+     * UnresolvableParameterException or trigger a factory unnecessarily. These
+     * checks are unconditional: they also hold with zend.assertions=-1.
+     *
      * Explicit arguments always win, then a container entry, then the current
      * container for a parameter typed exactly `ContainerInterface`, then
      * defaults/null.
+     *
+     * Positional and named arguments can be mixed, as in a PHP call:
+     * positionals fill parameters by position (reindexed in insertion order)
+     * and must come first; named arguments fill parameters by name.
      *
      * @param \ReflectionParameter[] $parameters
      * @param array<mixed> $arguments
@@ -143,68 +89,73 @@ final class Parameters
         array $arguments,
         ?ContainerInterface $container = null,
     ): array {
-        // If we have an int indexed array, arguments are positional
-        // Use named keys if no arguments are provided
-        $isPositional = count($arguments) === 0 ? false : array_is_list($arguments);
+        [$positional, $named] = ArgumentGuard::partitionArguments($arguments);
+        ArgumentGuard::validateArguments($parameters, $positional, $named);
+
+        // Auto-resolved values are stored under their position when only
+        // positionals were passed (list output), under their name otherwise.
+        $storeAutoAtPosition = $positional !== [] && $named === [];
 
         $resolvedArguments = [];
-        $count = -1;
         foreach ($parameters as $parameter) {
-            $count++;
-
+            $position = $parameter->getPosition();
             $paramType = $parameter->getType();
             $paramName = $parameter->getName();
 
             // Last argument is variadic
             if ($parameter->isVariadic()) {
-                if (!array_key_exists($paramName, $arguments)) {
-                    // Merge remaining arguments
-                    $resolvedArguments = [...$resolvedArguments, ...array_slice($arguments, $count)];
-                    break;
-                }
-
-                // Handle named variadic argument (expecting an array)
-                $providedVariadic = $arguments[$paramName];
-                if (!is_array($providedVariadic)) {
-                    throw new InvalidArgumentException(sprintf(
-                        'Variadic argument for parameter $%s must be an array when passed by name, got %s.',
-                        $paramName,
-                        get_debug_type($providedVariadic),
-                    ));
-                }
-                // Type check elements if variadic has a type hint (e.g., string ...$names)
-                if ($paramType instanceof ReflectionNamedType) {
-                    foreach ($providedVariadic as $variadicArg) {
-                        assert(
-                            self::valueMatchType($variadicArg, $paramType),
-                            "parameter `{$paramName}` doesn't support " . get_debug_type($variadicArg),
-                        );
+                if (array_key_exists($paramName, $named)) {
+                    // Named variadic argument, validated to be an array
+                    $providedVariadic = ArgumentGuard::namedVariadicValue($paramName, $named[$paramName]);
+                    // Type check elements if variadic has a type hint (e.g., string ...$names)
+                    if ($paramType instanceof ReflectionNamedType) {
+                        foreach ($providedVariadic as $variadicArg) {
+                            assert(
+                                self::valueMatchType($variadicArg, $paramType),
+                                "parameter `{$paramName}` doesn't support " . get_debug_type($variadicArg),
+                            );
+                        }
+                    }
+                    $resolvedArguments[$paramName] = $providedVariadic;
+                } else {
+                    // Surplus positional arguments feed the variadic; validation
+                    // guarantees they start exactly at the variadic position and
+                    // are contiguous, so flattenArguments() never hits a hole.
+                    foreach (array_slice($positional, $position) as $offset => $value) {
+                        $resolvedArguments[$position + $offset] = $value;
                     }
                 }
-                $resolvedArguments[$paramName] = $providedVariadic;
 
                 // Variadic is always the last parameter
                 break;
             }
 
-            // Check if argument is already provided, including null values
-            $argumentKey = $isPositional ? $count : $paramName;
-            $isProvided = array_key_exists($argumentKey, $arguments);
-
-            if ($isProvided) {
-                $providedArgument = $arguments[$argumentKey];
-
-                // Provided argument doesn't match type
+            // Provided positionally: stored under its (reindexed) position
+            if (array_key_exists($position, $positional)) {
+                $providedArgument = $positional[$position];
                 assert(
                     self::valueMatchType($providedArgument, $paramType),
                     "parameter `{$paramName}` doesn't support " . get_debug_type($providedArgument),
                 );
-
-                $resolvedArguments[$argumentKey] = $providedArgument;
+                $resolvedArguments[$position] = $providedArgument;
                 continue;
             }
 
-            $resolvedArguments[$argumentKey] = self::resolveSingleParameter($parameter, $container);
+            // Provided by name: stored under the parameter name
+            if (array_key_exists($paramName, $named)) {
+                $providedArgument = $named[$paramName];
+                assert(
+                    self::valueMatchType($providedArgument, $paramType),
+                    "parameter `{$paramName}` doesn't support " . get_debug_type($providedArgument),
+                );
+                $resolvedArguments[$paramName] = $providedArgument;
+                continue;
+            }
+
+            $resolvedArguments[$storeAutoAtPosition ? $position : $paramName] = self::resolveSingleParameter(
+                $parameter,
+                $container,
+            );
         }
 
         return $resolvedArguments;

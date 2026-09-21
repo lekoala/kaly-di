@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kaly\Tests;
 
 use AssertionError;
+use InvalidArgumentException;
 use Kaly\Di\Container;
 use Kaly\Di\Parameters;
 use Kaly\Di\UnresolvableParameterException;
@@ -243,23 +244,6 @@ class ParametersTest extends TestCase
             $resolved,
         );
 
-        // Extra named arguments are ignored
-        $arguments = ['param1' => 'test', 'param2' => 123, 'param3' => true, 'extra' => 'extra'];
-        $resolved = Parameters::resolveParameters($parameters, $arguments);
-        $this->assertSame(
-            [
-                'param1' => 'test',
-                'param2' => 123,
-                'param3' => true,
-                'param4' => [],
-                'param5' => 0,
-                'param6' => false,
-                'param7' => null,
-                'param8' => null,
-            ],
-            $resolved,
-        );
-
         // Return order is based on the actual signature, regardless of input order
         $arguments = ['param1' => 'test', 'param3' => true, 'param2' => 123];
         $resolved = Parameters::resolveParameters($parameters, $arguments);
@@ -276,6 +260,92 @@ class ParametersTest extends TestCase
             ],
             $resolved,
         );
+
+        // Unknown named arguments are rejected (before any resolution)
+        $arguments = ['param1' => 'test', 'param2' => 123, 'param3' => true, 'extra' => 'extra'];
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Unknown named argument\(s\): `extra`/');
+        Parameters::resolveParameters($parameters, $arguments);
+    }
+
+    public function testResolveParametersMixedPositionalAndNamed(): void
+    {
+        $reflection = new ReflectionClass(ReflTestMock::class);
+        $method = $reflection->getMethod('methodWithManyParams');
+        $parameters = $method->getParameters();
+
+        // Positional prefix + named arguments, as in a PHP call
+        $arguments = [0 => 'test', 1 => 123, 'param3' => true];
+        $resolved = Parameters::resolveParameters($parameters, $arguments);
+        $flat = Parameters::flattenArguments($parameters, $resolved);
+
+        $this->assertSame(['test', 123, true, [], 0, false, null, null], $flat);
+    }
+
+    public function testResolveParametersRejectsDoubleAssignment(): void
+    {
+        $reflection = new ReflectionClass(ReflTestMock::class);
+        $method = $reflection->getMethod('methodWithManyParams');
+        $parameters = $method->getParameters();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/`param1` is provided both positionally/');
+        Parameters::resolveParameters($parameters, [0 => 'test', 'param1' => 'other']);
+    }
+
+    public function testResolveParametersRejectsDoubleAssignmentOnVariadic(): void
+    {
+        $reflection = new ReflectionClass(ReflTestMock::class);
+        $method = $reflection->getMethod('methodWithManyParams');
+        $parameters = $method->getParameters();
+
+        $arguments = ['test', 123, true, [], 0, false, null, null, 'extra'];
+        $arguments['variadic'] = ['named'];
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Variadic parameter `variadic` is provided both/');
+        Parameters::resolveParameters($parameters, $arguments);
+    }
+
+    public function testResolveParametersRejectsSurplusPositionalArguments(): void
+    {
+        $fn = fn(string $a, string $b): string => $a . $b;
+        $parameters = (new ReflectionFunction($fn))->getParameters();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Too many positional arguments: expected at most 2, got 3/');
+        Parameters::resolveParameters($parameters, ['a', 'b', 'c']);
+    }
+
+    public function testResolveParametersRejectsPositionalAfterNamed(): void
+    {
+        $reflection = new ReflectionClass(ReflTestMock::class);
+        $method = $reflection->getMethod('methodWithManyParams');
+        $parameters = $method->getParameters();
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Positional arguments must be provided before named/');
+        Parameters::resolveParameters($parameters, ['param1' => 'test', 0 => 'other']);
+    }
+
+    public function testArgumentValidationWorksWithAssertionsDisabled(): void
+    {
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'zend.assertions=-1', __DIR__ . '/fixtures/unknown_arguments_assertions_disabled.php'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, (string) $stderr);
+        $this->assertSame("ok\n", $stdout);
+        $this->assertSame('', $stderr);
     }
 
     public function testResolveParametersMissingRequiredThrows(): void

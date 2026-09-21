@@ -301,6 +301,18 @@ guarantee holds in production too.
 $definitions->lock();
 ```
 
+Locking happens automatically at the composition root: `createContainer()` locks
+before creating the container, and the `Container` constructor locks the
+definitions it receives (`lock()` is idempotent). Mutations must therefore stop
+before the first container is built from a `Definitions` object:
+
+```php
+$definitions = Definitions::create()->set(Foo::class, new Foo());
+$container = new Container($definitions);
+
+$definitions->set(Bar::class, new Bar()); // DefinitionException: locked
+```
+
 ### Creating the Container
 
 `createContainer()` is the terminal method of the fluent chain. It locks the

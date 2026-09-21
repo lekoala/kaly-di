@@ -57,6 +57,9 @@ class Container implements ContainerInterface
         if (is_array($definitions) || is_null($definitions)) {
             $definitions = new Definitions($definitions ?? []);
         }
+        // Locking is idempotent: once the composition root has a container,
+        // definitions must not change anymore (createContainer() locks first).
+        $definitions->lock();
         $this->definitions = $definitions;
     }
 
@@ -72,7 +75,16 @@ class Container implements ContainerInterface
     public function get(string $id): object
     {
         // If has($id) returns false, get($id) MUST throw a NotFoundExceptionInterface.
-        if (!$this->has($id)) {
+        // has() is read-only but may autoload or reflect the id: any failure there is
+        // normalized so get() only ever throws PSR-11 exceptions. A direct has()
+        // call is not wrapped and may surface the underlying error as-is.
+        try {
+            $exists = $this->has($id);
+        } catch (\Throwable $e) {
+            $type = $e::class;
+            throw new ContainerException("Unable to check `{$id}`, threw exception: `{$type}`", 0, $e);
+        }
+        if (!$exists) {
             throw new ReferenceNotFoundException("`{$id}` is not set");
         }
 
@@ -86,13 +98,16 @@ class Container implements ContainerInterface
             return $this->instances[$id];
         }
 
-        // Guard the whole resolution: factory closures, constructor and callbacks
+        // Guard the whole resolution: factory closures, constructor and callbacks.
+        // Rejected before the marker is set: a recursive call refused here must
+        // not touch the marker owned by the outer call.
         if (array_key_exists($id, $this->building)) {
             $buildChain = implode(', ', array_keys($this->building));
             throw new CircularReferenceException("Circular reference to `{$id}` in `{$buildChain}`");
         }
 
-        // Use try/finally pattern to make sure we unset building[$id] when throwing exceptions
+        // Marker set before the try: the finally below only ever cleans the
+        // marker of its own call.
         $this->building[$id] = true;
 
         try {
@@ -100,6 +115,8 @@ class Container implements ContainerInterface
             $instance = $this->build($id);
             // Callbacks run only once since instances are cached
             $this->configure($instance, $id);
+            // Nothing is cached before configure(): a failed resolution leaves
+            // no partial state and the whole build can be replayed safely.
             $this->instances[$id] = $instance;
 
             return $instance;
@@ -322,8 +339,12 @@ class Container implements ContainerInterface
      * Call additional methods after instantiation.
      *
      * Callbacks are matched on the class hierarchy. Id-specific callbacks are
-     * appended only for custom service ids (not for class or interface ids,
-     * which are already covered by the hierarchy).
+     * appended whenever the id is not already covered by that hierarchy: a
+     * custom id, but also a class id remapped to an unrelated class
+     * (set(A::class, B::class) where B does not extend A). When the id IS part
+     * of the hierarchy (the instance's own class, a parent, an interface),
+     * callbacksForClass() already collected them and appending again would run
+     * them twice.
      *
      * @param object $instance The instance to configure
      * @param string $id Id in the container
@@ -335,9 +356,13 @@ class Container implements ContainerInterface
         // Get callbacks defined for the class and its hierarchy (including interfaces)
         $callbacks = $this->definitions->callbacksForClass($instanceClass);
 
-        // Id-specific callbacks only apply to custom service ids
-        if ($id !== $instanceClass && !class_exists($id) && !interface_exists($id)) {
-            $callbacks = [...$callbacks, ...array_values($this->definitions->callbacksFor($id))];
+        // Id-specific callbacks unless the id is already covered by the hierarchy
+        if ($id !== $instanceClass) {
+            $hierarchy = ReflectionCache::classHierarchy($instanceClass);
+            $covered = in_array($id, $hierarchy['interfaces'], true) || in_array($id, $hierarchy['parents'], true);
+            if (!$covered) {
+                $callbacks = [...$callbacks, ...array_values($this->definitions->callbacksFor($id))];
+            }
         }
 
         foreach ($callbacks as $closure) {

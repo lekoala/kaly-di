@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use Kaly\Di\Container;
 use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Tests\Mocks\TestInterface;
@@ -34,6 +35,18 @@ class DefinitionsLockTest extends TestCase
                 $this->assertStringContainsString('locked', $e->getMessage(), $name);
             }
         }
+    }
+
+    public function testContainerConstructorLocksDefinitions(): void
+    {
+        $definitions = Definitions::create()->set('service', TestObject::class);
+        $di = new Container($definitions);
+
+        $this->assertTrue($definitions->isLocked());
+
+        $this->expectException(DefinitionException::class);
+        $this->expectExceptionMessageMatches('/locked/');
+        $definitions->set('other', TestObject::class);
     }
 
     public function testMutatorsThrowAfterLockWithAssertionsDisabled(): void

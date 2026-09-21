@@ -55,6 +55,41 @@ rebind() is the only intentional replacement operation.
   silently ignored. The check runs before parameter closures are executed and lists
   the unknown and available names.
 
+### Changed (argument validation)
+
+- **BC:** `Parameters::resolveParameters()` — and therefore `Injector::invoke()` and
+  `Injector::make()` — now rejects invalid argument lists with an
+  `InvalidArgumentException`, thrown unconditionally before any dependency is
+  resolved: unknown named arguments (previously silently ignored), surplus
+  positional arguments when there is no variadic parameter (previously dropped),
+  the same parameter provided positionally and by name, and a positional argument
+  following a named one.
+- Mixed positional and named arguments (a positional prefix followed by named
+  arguments, like a PHP call) are now supported and land on their parameter; a
+  positional argument used to be silently dropped in that case.
+
+### Changed (container construction)
+
+- Creating a container locks the `Definitions` it receives (`lock()` is
+  idempotent; `createContainer()` already locked them). Mutating definitions
+  after a container was built from them now always fails with a
+  `DefinitionException`.
+- `Container::get()` wraps any error raised while checking existence (the `has()`
+  check inside `get()`, e.g. a failing autoloader) in a `ContainerException` with
+  the original error as `previous`, so `get()` only throws PSR-11 exceptions. A
+  direct `has()` call is not wrapped and surfaces the error as-is.
+- Failed resolutions leave no partial state: nothing is cached before configure()
+  runs, and the cycle guard only clears the marker of its own call, so the whole
+  factory + callback chain is safely replayed on the next `get()`. Factories and
+  callbacks must be idempotent.
+
+### Fixed
+
+- Callbacks registered on an id remapped to an unrelated class
+  (`set(A::class, B::class)` where `B` does not extend `A` and shares no
+  interface with it) now run on the produced instance. Ids that are part of the
+  instance hierarchy still run exactly once.
+
 ### Documentation
 
 - Clarified the boundary: unconditional configuration invariants are always-on
@@ -62,5 +97,10 @@ rebind() is the only intentional replacement operation.
   code remain development assertions.
 - Documented that a composition is validated by tests exercising real configurations
   and entry points, not by an ahead-of-time graph audit.
+- Documented argument validation and the absence of general exception wrapping in
+  the Injector ([docs/injector.md](./docs/injector.md)), definition locking at
+  container construction ([docs/definitions.md](./docs/definitions.md)), and the
+  `has()`-inside-`get()` wrapping plus failure-replay guarantees
+  ([docs/architecture.md](./docs/architecture.md)).
 
 See [docs/definitions.md](./docs/definitions.md) for details.

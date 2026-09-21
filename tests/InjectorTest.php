@@ -135,6 +135,51 @@ class InjectorTest extends TestCase
         $injector->invoke($fn, a: true);
     }
 
+    public function testInjectorMixedPositionalAndNamedArguments(): void
+    {
+        $injector = new Injector(new Container());
+        $fn = fn(string $a = 'default', string $b = 'B'): string => $a . $b;
+
+        // Positional + named in one call: both must land on their parameter
+        // (the positional used to be silently dropped)
+        $this->assertEquals('ab', $injector->invoke($fn, 'a', b: 'b'));
+
+        // Same for make()
+        $inst = $injector->make(TestObject5::class, 'test', v2: 'other', arr: []);
+        $this->assertEquals('test', $inst->v);
+        $this->assertEquals('other', $inst->v2);
+    }
+
+    public function testInvokeRejectsUnknownNamedArgument(): void
+    {
+        $injector = new Injector(new Container());
+        $fn = fn(string $a): string => $a;
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Unknown named argument\(s\): `b`/');
+        $injector->invoke($fn, a: 'x', b: 'y');
+    }
+
+    public function testInvokeRejectsSurplusPositionalArguments(): void
+    {
+        $injector = new Injector(new Container());
+        $fn = fn(string $a, string $b): string => $a . $b;
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/Too many positional arguments/');
+        $injector->invoke($fn, 'a', 'b', 'c');
+    }
+
+    public function testInvokeRejectsDoubleAssignment(): void
+    {
+        $injector = new Injector(new Container());
+        $fn = fn(string $a): string => $a;
+
+        $this->expectException(InvalidArgumentException::class);
+        $this->expectExceptionMessageMatches('/both positionally/');
+        $injector->invoke($fn, 'x', a: 'y');
+    }
+
     public function testMakeInterfaceThrows(): void
     {
         $injector = new Injector(new Container());

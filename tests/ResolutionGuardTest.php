@@ -13,6 +13,8 @@ use Kaly\Tests\Mocks\TestObjectSelf;
 use LogicException;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
+use RuntimeException;
+use stdClass;
 
 /**
  * The resolution guard in Container::get() must cover the whole resolution:
@@ -113,6 +115,74 @@ class ResolutionGuardTest extends TestCase
 
         $this->expectException(CircularReferenceException::class);
         $di->get(TestObject::class);
+    }
+
+    public function testCircularFailureLeavesNoPartialStateAndCanReplay(): void
+    {
+        $attemptsA = 0;
+        $definitions = Definitions::create()->set('a', function (ContainerInterface $c) use (&$attemptsA): object {
+            $attemptsA++;
+            $c->get('b');
+            return new stdClass();
+        })->set('b', fn(ContainerInterface $c): object => $c->get('a'));
+
+        $di = new Container($definitions);
+
+        foreach ([1, 2] as $expectedAttempts) {
+            try {
+                $di->get('a');
+                $this->fail('Expected a CircularReferenceException');
+            } catch (CircularReferenceException $e) {
+                $this->assertStringContainsString('Circular reference to `a`', $e->getMessage());
+
+                // Nothing cached, marker of the failed call cleaned: the next
+                // get() re-runs the whole factory chain instead of tripping
+                // over a stale building marker.
+            }
+            $this->assertSame($expectedAttempts, $attemptsA);
+        }
+    }
+
+    public function testErrorsWhileCheckingExistenceAreWrapped(): void
+    {
+        $di = new Container();
+        $missing = 'Kaly\\Tests\\Broken\\MissingClass';
+
+        spl_autoload_register(
+            $loader = static function (string $class) use ($missing): void {
+                if ($class === $missing) {
+                    throw new RuntimeException('autoload boom');
+                }
+            },
+        );
+
+        try {
+            $di->get($missing);
+            $this->fail('Expected a ContainerException');
+        } catch (ContainerException $e) {
+            $this->assertStringContainsString("Unable to check `{$missing}`", $e->getMessage());
+            $this->assertInstanceOf(RuntimeException::class, $e->getPrevious());
+        } finally {
+            spl_autoload_unregister($loader);
+        }
+
+        // has() itself stays raw: the same failure surfaces unwrapped
+        spl_autoload_register(
+            $loader = static function (string $class) use ($missing): void {
+                if ($class === $missing) {
+                    throw new RuntimeException('autoload boom');
+                }
+            },
+        );
+
+        try {
+            $di->has($missing);
+            $this->fail('Expected a RuntimeException');
+        } catch (RuntimeException $e) {
+            $this->assertSame('autoload boom', $e->getMessage());
+        } finally {
+            spl_autoload_unregister($loader);
+        }
     }
 
     public function testFactoryExceptionIsWrappedInContainerException(): void

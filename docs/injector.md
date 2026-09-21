@@ -142,3 +142,33 @@ $result = $injector->invoke($concat, ...['value1', 'value2']);
 > **Note:** `make` always returns a **new instance**. It uses the container only to
 > resolve missing object dependencies. If you need the container's shared instance,
 > use `$container->get()` instead.
+
+## Argument Validation
+
+Arguments may be positional, named, or a mix of both: a positional prefix followed
+by named arguments, exactly like a PHP call.
+
+```php
+$injector->invoke($fn, 'a', b: 'b');
+$injector->make(MyService::class, 'first', v2: 'second');
+```
+
+Before anything is resolved, the argument list is validated and an
+`InvalidArgumentException` is thrown — regardless of assertion settings — for:
+
+- unknown named arguments,
+- the same parameter provided positionally and by name (variadic included),
+- surplus positional arguments when the callable has no variadic parameter,
+- a positional argument following a named one.
+
+Validation runs before any dependency is resolved, so a rejected call has no side
+effects.
+
+## Exceptions Are Not Wrapped
+
+The Injector has no general exception wrapping: callers see the original failure
+types. Argument validation rejects with `InvalidArgumentException`; unsatisfiable
+object dependencies surface as `UnresolvableParameterException`; `make()` converts
+a `ReflectionException` into an `InvalidArgumentException` for an unknown class.
+This is unlike `Container::get()`, which normalizes errors to PSR-11 exception
+types — see [architecture](./architecture.md).

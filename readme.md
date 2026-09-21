@@ -91,6 +91,9 @@ Parameter resolution (`Parameters::resolveParameters()`, `valueMatchType()`,
 deliberately not part of the public API: unlike the legacy permissive resolver,
 it never invents `''/0/false/[]` defaults and throws
 `UnresolvableParameterException` for required parameters that cannot be satisfied.
+Argument lists themselves are validated first: unknown named arguments, double
+assignments, surplus positionals and positional-after-named are rejected with an
+`InvalidArgumentException` before anything is resolved.
 
 ## Configuration Errors, Assertions and Composition Tests
 

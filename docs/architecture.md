@@ -136,9 +136,18 @@ merge()
     => additive composition
     => conflicts fail before mutation
 
+invalid arguments (unknown name, double assignment,
+surplus positional without variadic, positional after named)
+    => fail before anything is resolved
+    => never silently drop or invent an argument
+
 unresolved required value
     => fail
     => never invent or coerce a value
+
+failed resolution (factory, constructor, callback)
+    => nothing is cached
+    => safe to replay the whole build on the next get()
 ```
 
 This contract is the acceptance criterion for future features: anything that would
@@ -171,6 +180,10 @@ foreach ($requests as $request) {
 `ReflectionCache` is process-wide: recreating a container does not throw away the
 reflection cost, it only resets the service cache.
 
+Building a container locks its `Definitions` (`lock()` is idempotent, so sharing
+one `Definitions` object across several containers is fine): configuration must
+not change once a container serves it.
+
 The same `Definitions` object can be shared by several containers. Whether an entry
 is shared *between* those containers depends on how it was declared:
 
@@ -193,6 +206,20 @@ Interfaces and abstract classes therefore return `false` unless they are bound.
 For concrete classes, `has()` reports whether the class itself is instantiable;
 constructor resolution may still fail when `get()` is called.
 
+A direct `has()` call is raw: if checking the id fails (for instance an
+autoloader throwing), the error surfaces as-is. Inside `get()`, the same check
+is wrapped in a `ContainerException` (original error as `previous`), so `get()`
+only ever throws PSR-11 exceptions.
+
+### Resolution failures leave no partial state
+
+Nothing is cached before the instance is fully built *and* configured: if a
+factory, a constructor or a callback throws, the resolution leaves no marker and
+no cached instance. The next `get()` replays the whole chain — factory included —
+so factories and callbacks must be idempotent. The cycle guard marks each call
+individually and only clears its own marker: a recursive call rejected by the
+guard never disturbs the outer call's marker.
+
 ### No Attributes or Annotations
 
 Kaly DI intentionally avoids "magic" attributes. This keeps domain code completely
@@ -207,6 +234,10 @@ Kaly DI separates two kinds of checks:
   regardless of assertion settings: locking, duplicate ids, `merge()` collisions,
   `rebind()` preconditions, and illegal factory results. They are already known and
   cheap to check.
+- **Invalid argument lists** passed to `Injector` (unknown named arguments,
+  double assignments, surplus positionals, positional after named) throw an
+  `InvalidArgumentException` before anything is resolved, regardless of assertion
+  settings.
 - **Checks that may autoload or reflect code the runtime might never use** (class
   existence, binding compatibility, argument types) use PHP `assert()`. They give
   feedback during development (`zend.assertions = 1`) and cost nothing in production

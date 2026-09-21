@@ -95,6 +95,9 @@ the final positional list ready for a Reflection call (variadic spread
 included). Argument lists themselves are validated first: unknown named
 arguments, double assignments, surplus positionals and positional-after-named
 are rejected with an `InvalidArgumentException` before anything is resolved.
+When a union parameter has several available candidates, resolution fails with
+an `UnresolvableParameterException` naming them instead of picking one: pass the
+dependency explicitly.
 
 ## Configuration Errors, Assertions and Composition Tests
 

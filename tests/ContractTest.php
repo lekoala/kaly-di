@@ -13,6 +13,7 @@ use Kaly\Di\Injector;
 use Kaly\Di\ReferenceNotFoundException;
 use Kaly\Di\UnresolvableParameterException;
 use Kaly\Tests\Mocks\TestAlternativeObject;
+use Kaly\Tests\Mocks\TestAmbiguousArg;
 use Kaly\Tests\Mocks\TestContainerAware;
 use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestNestedLeaf;
@@ -302,6 +303,33 @@ class ContractTest extends TestCase
             $this->assertStringContainsString(TestNestedMiddle::class . '::$leaf', $path);
             $this->assertStringContainsString(TestNestedLeaf::class . '::$apiKey', $path);
             $this->assertStringContainsString('Path:', $e->getMessage());
+        }
+    }
+
+    /**
+     * A union parameter with several available candidates is ambiguous. The
+     * enriched top message names the frame; the ambiguity detail (parameter and
+     * competing candidates) is preserved in the cause chain.
+     */
+    public function testAmbiguityDiagnosticSurvivesContainerEnrichment(): void
+    {
+        $di = new Container();
+
+        try {
+            $di->get(TestAmbiguousArg::class);
+            $this->fail('Expected an UnresolvableParameterException');
+        } catch (UnresolvableParameterException $e) {
+            $this->assertSame('v', $e->getParameterName());
+            $this->assertStringContainsString('cannot resolve parameter: `v`', $e->getMessage());
+
+            $chain = implode("\n", array_map(
+                static fn(\Throwable $cause): string => $cause->getMessage(),
+                $this->exceptionChain($e),
+            ));
+            $this->assertStringContainsString('ambiguous', $chain);
+            $this->assertStringContainsString('`' . TestObject::class . '`', $chain);
+            $this->assertStringContainsString('`' . TestObjectB::class . '`', $chain);
+            $this->assertStringContainsString('Provide an explicit argument', $chain);
         }
     }
 

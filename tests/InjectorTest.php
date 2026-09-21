@@ -16,6 +16,7 @@ use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObject5;
 use Kaly\Tests\Mocks\TestObject5Parent;
 use Kaly\Tests\Mocks\TestObject6;
+use Kaly\Tests\Mocks\TestObjectB;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
@@ -82,6 +83,89 @@ class InjectorTest extends TestCase
         $resolved = $injector->invoke(fn(ContainerInterface $c): ContainerInterface => $c);
 
         $this->assertSame($container, $resolved);
+    }
+
+    public function testSingleCandidateIsResolvedThroughTheContainer(): void
+    {
+        $expected = new TestObject();
+        $container = $this->createMock(Container::class);
+        $container->method('has')->willReturnCallback(static fn(string $id): bool => $id === TestObject::class);
+        $container->expects($this->once())->method('get')->with(TestObject::class)->willReturn($expected);
+
+        $injector = new Injector($container);
+
+        $this->assertSame($expected, $injector->invoke(fn(TestObject $o): TestObject => $o));
+    }
+
+    public function testTwoCandidatesRequireAnExplicitArgumentAndNeverCallGet(): void
+    {
+        $container = $this->createMock(Container::class);
+        $container
+            ->method('has')
+            ->willReturnCallback(
+                static fn(string $id): bool => $id === TestObject::class || $id === TestObjectB::class,
+            );
+        $container->expects($this->never())->method('get');
+
+        $injector = new Injector($container);
+
+        try {
+            $injector->invoke(fn(TestObject|TestObjectB $o) => $o);
+            $this->fail('Expected an UnresolvableParameterException');
+        } catch (UnresolvableParameterException $e) {
+            $this->assertSame('o', $e->getParameterName());
+            $this->assertStringContainsString('ambiguous', $e->getMessage());
+            $this->assertStringContainsString('`' . TestObject::class . '`', $e->getMessage());
+            $this->assertStringContainsString('`' . TestObjectB::class . '`', $e->getMessage());
+        }
+    }
+
+    public function testAnExplicitArgumentWinsOverAmbiguityWithoutAnyLookup(): void
+    {
+        $container = $this->createMock(Container::class);
+        $container->expects($this->never())->method('has');
+        $container->expects($this->never())->method('get');
+
+        $injector = new Injector($container);
+        $value = new TestObject();
+
+        $this->assertSame($value, $injector->invoke(fn(TestObject|TestObjectB $o) => $o, $value));
+    }
+
+    public function testSingleCandidateFailurePropagatesWithoutFallback(): void
+    {
+        $container = $this->createMock(Container::class);
+        $container->method('has')->willReturnCallback(static fn(string $id): bool => $id === TestObject::class);
+        $container
+            ->expects($this->once())
+            ->method('get')
+            ->with(TestObject::class)
+            ->willThrowException(new \RuntimeException('candidate boom'));
+
+        $injector = new Injector($container);
+
+        $this->expectException(\RuntimeException::class);
+        $this->expectExceptionMessage('candidate boom');
+
+        // The default value must not be used as a fallback.
+        $injector->invoke(fn(?TestObject $o = null) => $o);
+    }
+
+    public function testTheCurrentContainerCountsAsAContainerInterfaceCandidate(): void
+    {
+        $container = $this->createMock(Container::class);
+        $container->method('has')->willReturnCallback(static fn(string $id): bool => $id === TestObject::class);
+        $container->expects($this->never())->method('get');
+
+        $injector = new Injector($container);
+
+        try {
+            $injector->invoke(fn(ContainerInterface|TestObject $x) => $x);
+            $this->fail('Expected an UnresolvableParameterException');
+        } catch (UnresolvableParameterException $e) {
+            $this->assertStringContainsString('`' . ContainerInterface::class . '`', $e->getMessage());
+            $this->assertStringContainsString('`' . TestObject::class . '`', $e->getMessage());
+        }
     }
 
     public function testInjectorArgumentPassing(): void

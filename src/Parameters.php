@@ -58,9 +58,18 @@ final class Parameters
      * UnresolvableParameterException or trigger a factory unnecessarily. These
      * checks are unconditional: they also hold with zend.assertions=-1.
      *
-     * Explicit arguments always win, then a container entry, then the current
-     * container for a parameter typed exactly `ContainerInterface`, then
-     * defaults/null.
+     * Explicit arguments always win. Otherwise every non-builtin type of the
+     * parameter is offered to the container (`has()`): no candidate falls
+     * through to the default value, then null, then an error; a single
+     * candidate is resolved with `get()` and its failure propagates, without
+     * trying the default, null or another candidate; several candidates raise
+     * an ambiguity error and an explicit argument is required. Candidates are
+     * never built to disambiguate, and two ids stay two candidates even if they
+     * could resolve to the same object. The current container itself is the
+     * candidate for a parameter typed exactly `ContainerInterface`.
+     *
+     * `has()` means "candidate available", not "construction guaranteed": a
+     * unique candidate can still fail in `get()`.
      *
      * Positional and named arguments can be mixed, as in a PHP call:
      * positionals fill parameters by position (reindexed in insertion order)
@@ -270,23 +279,34 @@ final class Parameters
         ReflectionParameter $parameter,
         ?ContainerInterface $container,
     ): mixed {
-        $types = self::getParameterTypes($parameter);
-        foreach ($types as $type) {
-            if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
-                continue;
+        if ($container !== null) {
+            $candidates = self::candidates($parameter, $container);
+
+            if (count($candidates) > 1) {
+                throw new UnresolvableParameterException(
+                    sprintf(
+                        'Cannot resolve required parameter #%d ($%s) of type %s: ambiguous, multiple candidates available (%s). Provide an explicit argument.',
+                        $parameter->getPosition(),
+                        $parameter->getName(),
+                        self::reflectionTypeToString($parameter->getType()),
+                        implode(', ', array_map(static fn(string $id): string => "`{$id}`", array_keys($candidates))),
+                    ),
+                    0,
+                    null,
+                    $parameter->getName(),
+                );
             }
-            $name = $type->getName();
-            if ($container) {
-                if ($container->has($name)) {
-                    return self::fromContainer($parameter, $name, $container);
-                }
-                // The resolver can always provide itself to a parameter typed
-                // exactly `ContainerInterface`. This is a resolver capability,
-                // not a container entry: has(ContainerInterface::class) stays
-                // false. An explicit definition, checked above, always wins.
-                if ($name === ContainerInterface::class) {
+
+            if ($candidates !== []) {
+                $name = (string) array_key_first($candidates);
+                // The resolver provides its own container for an exact
+                // `ContainerInterface` type: this is a resolver capability, not
+                // a container entry. An explicit definition was treated as a
+                // regular candidate above and wins naturally.
+                if ($candidates[$name]) {
                     return $container;
                 }
+                return self::fromContainer($parameter, $name, $container);
             }
         }
 
@@ -309,6 +329,38 @@ final class Parameters
             null,
             $parameter->getName(),
         );
+    }
+
+    /**
+     * Every object type of the parameter that the container reports as
+     * available, in reflection order.
+     *
+     * The value is true when the resolver itself provides the value (the
+     * current container for a parameter typed exactly `ContainerInterface`)
+     * instead of resolving it through `get()`.
+     *
+     * @return array<string, bool>
+     */
+    private static function candidates(ReflectionParameter $parameter, ContainerInterface $container): array
+    {
+        $candidates = [];
+        foreach (self::getParameterTypes($parameter) as $type) {
+            if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
+                continue;
+            }
+            $name = $type->getName();
+            if ($container->has($name)) {
+                $candidates[$name] = false;
+            } elseif ($name === ContainerInterface::class) {
+                // The resolver can always provide itself to a parameter typed
+                // exactly `ContainerInterface`. This is a resolver capability,
+                // not a container entry: has(ContainerInterface::class) stays
+                // false. An explicit definition, checked above, always wins.
+                $candidates[$name] = true;
+            }
+        }
+
+        return $candidates;
     }
 
     /**

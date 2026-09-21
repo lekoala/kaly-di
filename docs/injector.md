@@ -104,6 +104,39 @@ $fn = fn (ContainerInterface $c): ContainerInterface => $c;
 $injector->invoke($fn) === $container; // true
 ```
 
+When a parameter has several object types (a union), this capability counts as
+one candidate like any other, so the union below is ambiguous rather than silently
+resolved to the service:
+
+```php
+$injector->invoke(fn (ContainerInterface|MyService $x) => $x);
+// => UnresolvableParameterException: pass the dependency explicitly
+```
+
+## Ambiguous Candidates Require an Explicit Argument
+
+A parameter may declare several object types. Each non-builtin type is offered to
+the container through `has()`, which only reports a **candidate**, never a
+guaranteed construction:
+
+- no candidate: the parameter falls back to its default value, then `null`, then fails;
+- one candidate: it is resolved with `get()`, and its failure propagates — the
+  default, `null` and any other candidate are not tried as a fallback;
+- several candidates: resolution fails with an `UnresolvableParameterException`
+  naming the parameter and the competing candidates. Pass the dependency
+  explicitly.
+
+```php
+// both Foo and Bar are available: no priority between candidates
+$injector->invoke(fn (Foo|Bar $dep) => $dep);
+// => UnresolvableParameterException
+
+$injector->invoke(fn (Foo|Bar $dep) => $dep, $foo); // explicit argument wins
+```
+
+Candidates are never built to disambiguate, and two ids stay two candidates even
+if they could resolve to the same object.
+
 ## Calling Functions
 
 You can invoke any PHP callable (closures, method arrays, etc.) and let the injector

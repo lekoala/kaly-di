@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## Unreleased
+## [0.3.0]
 
 ### Added
 
@@ -72,7 +72,23 @@ rebind() is the only intentional replacement operation.
   included), instead of a mixed position/name keyed array that required a
   separate `flattenArguments()` pass. `flattenArguments()` is removed;
   `Injector::invoke()`, `Injector::make()` and `Container` consume the list
-  directly. The method remains internal (not part of the public API).
+   directly. The method remains internal (not part of the public API).
+
+### Changed (parameter resolution)
+
+- **BC:** an object parameter whose union has several available candidates
+  (several non-builtin types reported by `has()`) now fails with an
+  `UnresolvableParameterException` naming the parameter and the competing
+  candidates, instead of resolving the first type in declaration order. An
+  explicit argument (or, when no candidate is available, a default value) is
+  how you disambiguate. Candidates are never built to disambiguate, and two ids
+  stay two candidates even if they could resolve to the same object. The
+  current container still counts as a candidate for a parameter typed exactly
+  `ContainerInterface`, so a union mixing it with another available type is
+  ambiguous too.
+- A single available candidate is resolved with `get()`; its failure now
+  propagates as-is, without trying another candidate, the default value or
+  `null`. `has()` means "candidate available", not "construction guaranteed".
 
 ### Changed (container construction)
 
@@ -119,6 +135,9 @@ rebind() is the only intentional replacement operation.
   container construction ([docs/definitions.md](./docs/definitions.md)), and the
   `has()`-inside-`get()` wrapping plus failure guarantees
   ([docs/architecture.md](./docs/architecture.md)).
+- Documented the parameter resolution contract: `has()` means "candidate
+  available", one candidate is resolved with `get()`, several candidates require
+  an explicit argument.
 - Corrected the failure contract: a failed resolution leaves the failed service
   uncached, but does not roll back already-built dependencies, side effects or
   provided instances; the next `get()` retries only that service.

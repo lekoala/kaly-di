@@ -145,6 +145,10 @@ unresolved required value
     => fail
     => never invent or coerce a value
 
+ambiguous object candidates (several non-builtin types offered by has())
+    => fail, explicit argument required
+    => candidates are never built to disambiguate
+
 failed resolution (factory, constructor, callback)
     => the failed service is not cached
     => the next get() retries that service; no rollback of
@@ -206,6 +210,10 @@ $definitions->set(Foo::class, fn () => new Foo());
 Interfaces and abstract classes therefore return `false` unless they are bound.
 For concrete classes, `has()` reports whether the class itself is instantiable;
 constructor resolution may still fail when `get()` is called.
+
+For parameter resolution, `has()` means "a candidate is available": a single
+candidate is resolved with `get()`, while several candidates make the parameter
+ambiguous instead of picking one (see [the resolution contract](#the-resolution-contract)).
 
 A direct `has()` call is raw: if checking the id fails (for instance an
 autoloader throwing), the error surfaces as-is. Inside `get()`, the same check

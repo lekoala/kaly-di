@@ -272,4 +272,24 @@ class DefinitionsOverrideTest extends TestCase
 
         $this->assertSame(TestObject::class, $def->get(TestInterface::class));
     }
+
+    public function testRebindDoesNotAutoloadWhenAssertionsAreDisabled(): void
+    {
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'zend.assertions=-1', __DIR__ . '/fixtures/rebind_assertions_disabled.php'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, (string) $stderr);
+        $this->assertSame("ok\n", $stdout);
+        $this->assertSame('', $stderr);
+    }
 }

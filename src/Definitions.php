@@ -290,14 +290,9 @@ final class Definitions
         $this->ensureUsableId($id);
         $this->assertValidDefinition($id, $value);
 
-        if (interface_exists($id) || class_exists($id) && (new \ReflectionClass($id))->isAbstract()) {
-            if (is_string($value)) {
-                assert(is_a($value, $id, true), "Class `{$value}` does not implement `{$id}`");
-            } elseif (!$value instanceof Closure) {
-                $valueClass = $value::class;
-                assert($value instanceof $id, "Object `{$valueClass}` does not implement `{$id}`");
-            }
-        }
+        // Development-only: is a typed id bound to a compatible value? The whole
+        // check lives inside assert() so isTypedId() never autoloads in production.
+        assert($this->isCompatibleReplacement($id, $value), $this->replacementMismatch($id, $value));
 
         $this->values[$id] = $value;
         return $this;
@@ -463,6 +458,49 @@ final class Definitions
     private function assertValidDefinition(string $id, string|object $value): void
     {
         assert(is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
+    }
+
+    /**
+     * Development assertion helper: is a rebind() value compatible with a typed
+     * id? Closures are free (their result is only known at execution time) and
+     * untyped ids accept anything. Only called from assert(), so isTypedId()
+     * never autoloads in production.
+     *
+     * @param class-string|object $value
+     */
+    private function isCompatibleReplacement(string $id, string|object $value): bool
+    {
+        if ($value instanceof Closure || !$this->isTypedId($id)) {
+            return true;
+        }
+        return is_string($value) ? is_a($value, $id, true) : $value instanceof $id;
+    }
+
+    /**
+     * Diagnostic for a failed isCompatibleReplacement() assertion.
+     *
+     * @param class-string|object $value
+     */
+    private function replacementMismatch(string $id, string|object $value): string
+    {
+        if (is_string($value)) {
+            return "Class `{$value}` does not implement `{$id}`";
+        }
+        if ($value instanceof Closure) {
+            return "Closure does not implement `{$id}`";
+        }
+        $valueClass = $value::class;
+        return "Object `{$valueClass}` does not implement `{$id}`";
+    }
+
+    /**
+     * Whether an id denotes an interface or an abstract class.
+     *
+     * May autoload, so it is only ever reached from within assert().
+     */
+    private function isTypedId(string $id): bool
+    {
+        return interface_exists($id) || class_exists($id) && (new \ReflectionClass($id))->isAbstract();
     }
 
     /**

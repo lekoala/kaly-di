@@ -92,6 +92,18 @@ This keeps the distinction between a shared service (`get()`) and a fresh object
 (`make()`) unambiguous. Either register the missing dependencies in the container, or
 pass them explicitly.
 
+One parameter is always satisfiable: a constructor or callable parameter typed exactly
+`Psr\Container\ContainerInterface` receives the Injector's own container. This is a
+resolver capability, not a lookup — it works even with a strict PSR-11 container that
+reports nothing through `has()`.
+
+```php
+$injector = new Injector($container);
+
+$fn = fn (ContainerInterface $c): ContainerInterface => $c;
+$injector->invoke($fn) === $container; // true
+```
+
 ## Calling Functions
 
 You can invoke any PHP callable (closures, method arrays, etc.) and let the injector

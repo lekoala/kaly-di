@@ -12,7 +12,9 @@ use Kaly\Tests\Mocks\ReflTestMock;
 use Kaly\Tests\Mocks\ReflTestMockObject;
 use PDO;
 use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
 use ReflectionClass;
+use ReflectionFunction;
 use ReflectionIntersectionType;
 use ReflectionNamedType;
 use ReflectionUnionType;
@@ -309,6 +311,26 @@ class ParametersTest extends TestCase
         $this->assertInstanceOf(stdClass::class, $resolved['param1']);
         $this->assertArrayHasKey('param2', $resolved);
         $this->assertNull($resolved['param2']);
+    }
+
+    public function testResolveParametersProvidesTheCurrentContainer(): void
+    {
+        $container = $this->createMock(Container::class);
+        $fn = fn(ContainerInterface $c): ContainerInterface => $c;
+        $parameters = (new ReflectionFunction($fn))->getParameters();
+
+        $resolved = Parameters::resolveParameters($parameters, [], $container);
+
+        $this->assertSame($container, $resolved['c']);
+    }
+
+    public function testResolveParametersWithoutContainerCannotResolveContainerInterface(): void
+    {
+        $fn = fn(ContainerInterface $c): ContainerInterface => $c;
+        $parameters = (new ReflectionFunction($fn))->getParameters();
+
+        $this->expectException(UnresolvableParameterException::class);
+        Parameters::resolveParameters($parameters, []);
     }
 
     /**

@@ -6,11 +6,13 @@ Kaly DI is designed around three boundaries:
 Definitions ─────── Kaly-specific configuration, used at the composition root
       │
       ▼
+Kaly resolution rules ── autowire concrete classes, resolve explicit bindings,
+      │                   share every get() instance in this Container
+      ▼
 Container ───────── implements Psr\Container\ContainerInterface
       │             public runtime API: get() / has()
-      │
       ▼
-application ─────── depends only on ContainerInterface
+application ─────── receives its dependencies directly, not the container
 
 Injector ────────── standalone utility, depends only on ContainerInterface
 ```
@@ -28,22 +30,78 @@ The library is composed of six main classes:
 
 ## Design Decisions
 
-### Vendor-specific configuration at the composition root; PSR-11 only at runtime
+### Configuration and runtime boundaries
 
-`Definitions` is the Kaly dialect used to build the graph. `Container` is a plain
-PSR-11 container. After the bootstrap, application code only ever needs
-`Psr\Container\ContainerInterface`, so it can never accidentally depend on a
-proprietary container API.
+`Definitions` is Kaly's configuration API. It is used at the composition root to
+describe bindings, parameters, factories, and callbacks.
 
-`ContainerInterface::class` is reserved: `$container->get(ContainerInterface::class)`
-always returns the container itself. `Definitions` refuses to declare it through any
-mutator (`set()`, `bind()`, `parameter()`, `callback()`).
+`Container` implements `Psr\Container\ContainerInterface`, so code that needs to
+consume a container can depend on the standard `get()` / `has()` interface rather
+than on Kaly-specific runtime methods.
+
+PSR-11 only defines how entries are retrieved; it does not define how identifiers
+are named, how entries are built, or their lifecycle. Kaly deliberately adds its own
+simple conventions on top: concrete class names can be autowired, abstractions must
+be explicitly bound, and entries returned by `Container::get()` are shared for the
+lifetime of that `Container` instance. See
+[PSR-11](https://www.php-fig.org/psr/psr-11/).
+
+Application services should normally receive their dependencies directly rather than
+depend on the container itself.
+
+### No reserved ids, no self-registration
+
+The container never registers itself and no identifier is reserved:
+
+```php
+$container->has(ContainerInterface::class); // false
+$container->get(ContainerInterface::class); // ReferenceNotFoundException
+```
+
+`ContainerInterface` is an ordinary id: declare it explicitly and you get it back,
+otherwise it is not found.
+
+```php
+$definitions->set(ContainerInterface::class, $someContainer);
+```
+
+Factories and callbacks receive the container as an explicit argument of the
+composition code:
+
+```php
+$definitions->set(
+    Foo::class,
+    fn (ContainerInterface $c) => new Foo($c->get(Bar::class)),
+);
+```
+
+### The resolver can provide the current container
+
+Parameter resolution is a separate concern from container entries. When a constructor
+or callable parameter is typed exactly `Psr\Container\ContainerInterface`, the resolver
+provides the container it is currently using. This is what lets
+`$container->get(Injector::class)` work, since `Injector` requires a container:
+
+```php
+$container = new Container();
+
+$injector = $container->get(Injector::class); // new Injector($container)
+```
+
+This is a deterministic resolver capability, not a hidden service: there is no name
+lookup and no guessing. It matches only the exact `ContainerInterface` type (never a
+concrete container class), and an explicit `ContainerInterface` definition wins over
+it. Application services should still receive their dependencies directly rather than
+depend on the container itself.
 
 ### `get()` resolves services, `make()` instantiates classes
 
-Every service requested through `Container::get()` is cached and therefore shared.
-For a fresh instance of a concrete class, use `Injector::make()`, which does not read
-Kaly definitions and does not populate the container cache.
+`Container::get()` resolves an entry using Kaly's container rules and returns the
+shared instance associated with that identifier.
+
+`Injector::make()` creates a fresh instance of a concrete class. It does not read
+Kaly `Definitions` for the class being created and does not populate the container's
+shared-instance cache.
 
 ### The resolution contract
 
@@ -108,16 +166,16 @@ $definitions->set(Foo::class, new Foo());
 $definitions->set(Foo::class, fn () => new Foo());
 ```
 
-### `has()` is exact
+### `has()` reports known or instantiable entries
 
-`Container::has($id)` returns true only when the container can actually provide the
-entry:
+`Container::has($id)` returns true for:
 
-- the reserved `ContainerInterface` entry,
 - an explicit definition or binding,
 - a concrete, instantiable class (auto-wiring).
 
 Interfaces and abstract classes therefore return `false` unless they are bound.
+For concrete classes, `has()` reports whether the class itself is instantiable;
+constructor resolution may still fail when `get()` is called.
 
 ### No Attributes or Annotations
 
@@ -132,8 +190,8 @@ performed using PHP `assert()`. This provides excellent feedback during developm
 (`zend.assertions = 1`) but ensures zero overhead in production (`zend.assertions = -1`).
 
 Runtime guarantees, by contrast, are enforced with real exceptions and hold regardless
-of assertion settings: locking throws a `LogicException`, and the reserved
-`ContainerInterface` id throws an `InvalidArgumentException`.
+of assertion settings: locking throws a `LogicException`, and a missing id throws a
+`ReferenceNotFoundException`.
 
 ### No Native Lazy Objects
 

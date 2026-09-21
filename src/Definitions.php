@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Kaly\Di;
 
 use Closure;
-use InvalidArgumentException;
 use LogicException;
 use Psr\Container\ContainerInterface;
 
@@ -23,11 +22,6 @@ use Psr\Container\ContainerInterface;
  */
 final class Definitions
 {
-    /**
-     * Identifier reserved by the container itself. It can never be overridden.
-     */
-    public const RESERVED_ID = ContainerInterface::class;
-
     /**
      * Store definitions as a map.
      * Typically, the key is a class name or a custom id.
@@ -175,7 +169,6 @@ final class Definitions
     public function set(string $id, string|object $value): self
     {
         $this->ensureNotLocked();
-        $this->assertNotReserved($id);
         assert(is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
         // Avoid resolving stdClass with the DI container
         assert($id !== \stdClass::class, 'Cannot set stdClass as id');
@@ -192,7 +185,6 @@ final class Definitions
     public function bind(string $abstract, string $concrete): self
     {
         $this->ensureNotLocked();
-        $this->assertNotReserved($abstract);
         assert(interface_exists($abstract) || class_exists($abstract), "Abstraction `{$abstract}` does not exist");
         assert(class_exists($concrete), "Class `{$concrete}` does not exist");
         assert(is_a($concrete, $abstract, true), "Class `{$concrete}` does not implement `{$abstract}`");
@@ -208,7 +200,6 @@ final class Definitions
     public function parameter(string $id, string $name, mixed $value): self
     {
         $this->ensureNotLocked();
-        $this->assertNotReserved($id);
         $this->parameters[$id][$name] = $value;
         return $this;
     }
@@ -258,7 +249,6 @@ final class Definitions
     public function callback(string $id, Closure $fn, ?string $name = null): self
     {
         $this->ensureNotLocked();
-        $this->assertNotReserved($id);
         // Use a stable, collision-free key so merging definitions never renumbers callbacks
         $name ??= (string) spl_object_id($fn);
         $this->callbacks[$id][$name] = $fn;
@@ -322,13 +312,6 @@ final class Definitions
     {
         if ($this->locked) {
             throw new LogicException('Definitions are locked and cannot be modified.');
-        }
-    }
-
-    private function assertNotReserved(string $id): void
-    {
-        if ($id === self::RESERVED_ID) {
-            throw new InvalidArgumentException(sprintf('%s is reserved by the container.', self::RESERVED_ID));
         }
     }
 }

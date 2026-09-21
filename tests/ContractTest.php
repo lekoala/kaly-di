@@ -11,6 +11,7 @@ use Kaly\Di\Definitions;
 use Kaly\Di\Injector;
 use Kaly\Di\ReferenceNotFoundException;
 use Kaly\Di\UnresolvableParameterException;
+use Kaly\Tests\Mocks\TestContainerAware;
 use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestNestedLeaf;
 use Kaly\Tests\Mocks\TestNestedMiddle;
@@ -69,6 +70,68 @@ class ContractTest extends TestCase
         $this->assertFalse($di->has(TestInterface::class));
         $this->expectException(ReferenceNotFoundException::class);
         $di->get(TestInterface::class);
+    }
+
+    public function testContainerInterfaceIsNotSelfRegistered(): void
+    {
+        $di = new Container();
+
+        $this->assertFalse($di->has(ContainerInterface::class));
+
+        try {
+            $di->get(ContainerInterface::class);
+            $this->fail('Expected a ReferenceNotFoundException');
+        } catch (ReferenceNotFoundException $e) {
+            $this->assertStringContainsString(ContainerInterface::class, $e->getMessage());
+        }
+    }
+
+    public function testContainerInterfaceIsAnOrdinaryExplicitId(): void
+    {
+        $other = new Container();
+        $di = new Container(Definitions::create()->set(ContainerInterface::class, $other));
+
+        $this->assertTrue($di->has(ContainerInterface::class));
+        $this->assertSame($other, $di->get(ContainerInterface::class));
+        $this->assertNotSame($di, $di->get(ContainerInterface::class));
+    }
+
+    public function testInjectorReceivesTheCurrentContainer(): void
+    {
+        $di = new Container();
+
+        $injector = $di->get(Injector::class);
+
+        $this->assertInstanceOf(Injector::class, $injector);
+        $this->assertSame($injector, $di->get(Injector::class));
+        $this->assertSame($di, $injector->invoke(fn(ContainerInterface $c): ContainerInterface => $c));
+    }
+
+    public function testAClassReceivesTheCurrentContainer(): void
+    {
+        $di = new Container();
+
+        $aware = $di->get(TestContainerAware::class);
+
+        $this->assertSame($di, $aware->container);
+    }
+
+    public function testExplicitContainerInterfaceDefinitionWinsOverTheResolver(): void
+    {
+        $other = new Container();
+        $di = new Container(Definitions::create()->set(ContainerInterface::class, $other));
+
+        $aware = $di->get(TestContainerAware::class);
+
+        $this->assertSame($other, $aware->container);
+    }
+
+    public function testInjectorCanBeDefinedExplicitly(): void
+    {
+        $customInjector = new Injector(new Container());
+        $di = new Container([Injector::class => $customInjector]);
+
+        $this->assertSame($customInjector, $di->get(Injector::class));
     }
 
     public function testBoundInterfaceIsResolvable(): void

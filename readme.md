@@ -11,7 +11,8 @@ separation of concerns:
 - **`Container`** — a PSR-11 container. At runtime, the only API is `get()`/`has()`.
 - **`Injector`** — an independent utility for building fresh instances and invoking callables.
 
-Application code never needs to depend on a proprietary container API.
+Application code should normally receive its dependencies directly rather than the
+container itself.
 
 ## Key Features
 
@@ -19,7 +20,7 @@ Application code never needs to depend on a proprietary container API.
 - **No Attributes, No Magic:** plain PHP configuration, no attributes or compilation.
 - **Strongly Typed Definitions:** define dependencies in PHP for full IDE support.
 - **Autowiring:** concrete classes are resolved automatically; bind interfaces when needed.
-- **Exact `has()`:** true only for internal entries, explicit definitions/bindings, or instantiable concrete classes.
+- **Predictable `has()`:** true for explicit definitions/bindings or instantiable concrete classes; constructor resolution may still fail in `get()`.
 - **Explicit Lifecycle:** `Container::get()` returns shared services, `Injector::make()` instantiates fresh concrete classes.
 - **Developer Friendly:** typed error reporting and development-only assertions.
 
@@ -93,7 +94,7 @@ it never invents `''/0/false/[]` defaults and throws
 
 Kaly DI distinguishes runtime guarantees from development-time validation:
 
-- **Runtime guarantees** (locking, the reserved `ContainerInterface` id) throw real
+- **Runtime guarantees** (locking) throw real
   exceptions and therefore always hold, even in production.
 - **Development-time validation** (class existence, binding compatibility, argument
   types) uses PHP `assert()`. These checks run in development

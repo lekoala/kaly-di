@@ -185,13 +185,31 @@ $container = Definitions::create()
     ->createContainer();
 ```
 
-## The Reserved `ContainerInterface` Id
+## The Container Is Not Registered By Default
 
-`Psr\Container\ContainerInterface` is reserved by the container:
-`$container->get(ContainerInterface::class)` always returns the container itself, and
-`Definitions` refuses to declare it through any mutator (`set()`, `bind()`,
-`parameter()`, `callback()`). This lets factories and infrastructure objects receive
-the container without ever knowing the concrete `Kaly\Di\Container`.
+No identifier is reserved and the container does not register itself. In particular,
+`Psr\Container\ContainerInterface` is not automatically available:
+
+```php
+$container->has(ContainerInterface::class); // false
+$container->get(ContainerInterface::class); // ReferenceNotFoundException
+```
+
+If you want an entry for it (or for any container), declare it explicitly — it then
+behaves like any other service:
+
+```php
+$definitions->set(ContainerInterface::class, $someContainer);
+```
+
+Factories and callbacks receive the container as an argument; they never need it as
+an autowired dependency. The resolver does provide the current container to a
+constructor or callable parameter typed exactly `Psr\Container\ContainerInterface`,
+but that is a resolution capability, not an entry — see the
+[architecture notes](./architecture.md).
+
+Note that `parameter()` and `callback()` do not create a definition: `has()` only
+reports entries registered with `set()` (or `bind()`).
 
 ## Shared vs Fresh
 

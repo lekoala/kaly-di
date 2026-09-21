@@ -71,11 +71,6 @@ class Container implements ContainerInterface
      */
     public function get(string $id): object
     {
-        // The container always resolves to itself through its interface
-        if ($id === ContainerInterface::class) {
-            return $this;
-        }
-
         // If has($id) returns false, get($id) MUST throw a NotFoundExceptionInterface.
         if (!$this->has($id)) {
             throw new ReferenceNotFoundException("`{$id}` is not set");
@@ -120,17 +115,15 @@ class Container implements ContainerInterface
      * Returns true if the container can return an entry for the given identifier.
      *
      * `true` means:
-     * - the reserved ContainerInterface entry,
      * - an explicit definition or binding,
      * - a concrete, instantiable class (auto-wiring).
      *
-     * Interfaces and abstract classes therefore return false unless bound.
+     * Interfaces and abstract classes therefore return false unless bound. For a
+     * concrete class, `has()` only reports that the class itself is instantiable:
+     * resolving its constructor arguments may still fail in `get()`.
      */
     public function has(string $id): bool
     {
-        if ($id === ContainerInterface::class) {
-            return true;
-        }
         // There is an explicit definition for it
         if ($this->definitions->has($id)) {
             return true;

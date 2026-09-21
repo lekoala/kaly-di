@@ -126,7 +126,9 @@ final class Parameters
     /**
      * Resolve constructor/callable arguments.
      *
-     * Explicit arguments always win, then the container, then defaults/null.
+     * Explicit arguments always win, then a container entry, then the current
+     * container for a parameter typed exactly `ContainerInterface`, then
+     * defaults/null.
      *
      * @param \ReflectionParameter[] $parameters
      * @param array<mixed> $arguments
@@ -215,16 +217,22 @@ final class Parameters
         // Resolve using the container for any valid type
         $types = self::getParameterTypes($parameter);
         foreach ($types as $type) {
-            if (!$type instanceof ReflectionNamedType) {
-                continue;
-            }
-            if ($type->isBuiltin()) {
+            if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
                 continue;
             }
             // The container must use the class or interface name as id
             $name = $type->getName();
-            if ($container && $container->has($name)) {
-                return $container->get($name);
+            if ($container) {
+                if ($container->has($name)) {
+                    return $container->get($name);
+                }
+                // The resolver can always provide itself to a parameter typed
+                // exactly `ContainerInterface`. This is a resolver capability,
+                // not a container entry: has(ContainerInterface::class) stays
+                // false. An explicit definition, checked above, always wins.
+                if ($name === ContainerInterface::class) {
+                    return $container;
+                }
             }
         }
 

@@ -9,7 +9,6 @@ use Kaly\Di\CircularReferenceException;
 use Kaly\Di\Container;
 use Kaly\Di\ContainerException;
 use Kaly\Di\Definitions;
-use Kaly\Di\Injector;
 use Kaly\Di\ReferenceNotFoundException;
 use Kaly\Di\UnresolvableParameterException;
 use Kaly\Tests\Mocks\TestAltInterface;
@@ -231,13 +230,6 @@ class ContainerTest extends TestCase
         $this->assertSame($app, $di->get(TestApp::class));
     }
 
-    public function testItReturnsSelfForContainerInterface(): void
-    {
-        $di = new Container();
-        $this->assertSame($di, $di->get(ContainerInterface::class));
-        $this->assertTrue($di->has(ContainerInterface::class));
-    }
-
     public function testItDoesNotAutoWireItsOwnInternals(): void
     {
         $di = new Container();
@@ -254,23 +246,6 @@ class ContainerTest extends TestCase
         $di = new Container();
         $this->expectException(ReferenceNotFoundException::class);
         $di->get(Definitions::class);
-    }
-
-    public function testItReturnsInjector(): void
-    {
-        $di = new Container();
-        $injector = $di->get(Injector::class);
-        $this->assertInstanceOf(Injector::class, $injector);
-
-        // It is shared like any other service
-        $this->assertSame($injector, $di->get(Injector::class));
-
-        // You can still define your own if you want
-        $customInjector = new Injector(new Container());
-        $di = new Container([
-            Injector::class => $customInjector,
-        ]);
-        $this->assertSame($customInjector, $di->get(Injector::class));
     }
 
     /**

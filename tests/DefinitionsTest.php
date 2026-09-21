@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
-use InvalidArgumentException;
+use AssertionError;
 use Kaly\Di\Container;
 use Kaly\Di\Definitions;
 use Kaly\Tests\Mocks\TestAltInterface;
@@ -124,37 +124,43 @@ class DefinitionsTest extends TestCase
         $this->assertEquals(DefinitionsTestConcrete::class, $def2->get(DefinitionsTestAbstract::class));
     }
 
-    public function testReservedIdCannotBeSetOrBound(): void
+    public function testContainerInterfaceCanBeUsedAsDefinitionId(): void
     {
         $def = Definitions::create();
-
-        $this->expectException(InvalidArgumentException::class);
-        $this->expectExceptionMessage('reserved by the container');
         $def->set(ContainerInterface::class, TestObject::class);
+
+        $this->assertTrue($def->has(ContainerInterface::class));
+        $this->assertSame(TestObject::class, $def->get(ContainerInterface::class));
     }
 
-    public function testReservedIdCannotBeBound(): void
+    public function testContainerInterfaceCanReceiveParametersAndCallbacks(): void
     {
         $def = Definitions::create();
-
-        $this->expectException(InvalidArgumentException::class);
-        $def->bind(ContainerInterface::class, TestObject::class);
-    }
-
-    public function testReservedIdCannotReceiveParameters(): void
-    {
-        $def = Definitions::create();
-
-        $this->expectException(InvalidArgumentException::class);
+        $callback = fn() => null;
         $def->parameter(ContainerInterface::class, 'x', 1);
+        $def->callback(ContainerInterface::class, $callback);
+
+        // Parameters and callbacks do not create a definition
+        $this->assertFalse($def->has(ContainerInterface::class));
+        $this->assertSame(['x' => 1], $def->parametersFor(ContainerInterface::class));
+        $this->assertSame($callback, $def->callbacksFor(ContainerInterface::class)[spl_object_id($callback)]);
     }
 
-    public function testReservedIdCannotReceiveCallbacks(): void
+    public function testContainerInterfaceCanBeBoundToACompatibleClass(): void
+    {
+        $def = Definitions::create();
+        $def->bind(ContainerInterface::class, Container::class);
+
+        $this->assertTrue($def->has(ContainerInterface::class));
+        $this->assertSame(Container::class, $def->get(ContainerInterface::class));
+    }
+
+    public function testContainerInterfaceRejectsAnIncompatibleBinding(): void
     {
         $def = Definitions::create();
 
-        $this->expectException(InvalidArgumentException::class);
-        $def->callback(ContainerInterface::class, fn() => null);
+        $this->expectException(AssertionError::class);
+        $def->bind(ContainerInterface::class, TestObject::class);
     }
 
     public function testParameter(): void

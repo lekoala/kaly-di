@@ -74,6 +74,16 @@ class InjectorTest extends TestCase
         $injector->invoke($fn);
     }
 
+    public function testInvokeResolvesContainerInterfaceParameter(): void
+    {
+        $container = new Container();
+        $injector = new Injector($container);
+
+        $resolved = $injector->invoke(fn(ContainerInterface $c): ContainerInterface => $c);
+
+        $this->assertSame($container, $resolved);
+    }
+
     public function testInjectorArgumentPassing(): void
     {
         $injector = new Injector(new Container());

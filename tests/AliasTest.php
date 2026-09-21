@@ -119,13 +119,24 @@ class AliasTest extends TestCase
 
     public function testMergeCarriesAliases(): void
     {
-        $base = Definitions::create()->set('service', TestObject::class)->alias('alias', 'service');
-        $incoming = Definitions::create()->set('other', TestObject2::class);
+        $base = Definitions::create()->set('service', TestObject::class);
+        $incoming = Definitions::create()->set('other', TestObject2::class)->alias('alias', 'other');
 
         $base->merge($incoming);
 
         $this->assertTrue($base->hasAlias('alias'));
-        $this->assertSame('service', $base->getAlias('alias'));
+        $this->assertSame('other', $base->getAlias('alias'));
         $this->assertTrue($base->has('other'));
+    }
+
+    public function testMergeCarriesANumericAlias(): void
+    {
+        $base = Definitions::create()->set('service', TestObject::class);
+        $incoming = Definitions::create()->set('target', TestObject2::class)->alias('123', 'target');
+
+        $base->merge($incoming);
+
+        $this->assertTrue($base->hasAlias('123'));
+        $this->assertSame('target', $base->getAlias('123'));
     }
 }

@@ -279,6 +279,32 @@ class ContractTest extends TestCase
         }
     }
 
+    public function testConfiguredParameterClosurePreservesTheOuterPath(): void
+    {
+        $definitions = Definitions::create()->parameter(
+            TestNestedRoot::class,
+            'middle',
+            fn(ContainerInterface $c) => $c->get(TestNestedMiddle::class),
+        );
+        $di = new Container($definitions);
+
+        try {
+            $di->get(TestNestedRoot::class);
+            $this->fail('Expected an UnresolvableParameterException');
+        } catch (UnresolvableParameterException $e) {
+            // The configured parameter is reported, not the nested leaf one
+            $this->assertSame('middle', $e->getParameterName());
+            $this->assertSame(TestNestedRoot::class, $e->getObjectId());
+            $this->assertStringContainsString('cannot resolve parameter: `middle`', $e->getMessage());
+
+            $path = (string) $e->getResolutionPath();
+            $this->assertStringContainsString(TestNestedRoot::class . '::$middle', $path);
+            $this->assertStringContainsString(TestNestedMiddle::class . '::$leaf', $path);
+            $this->assertStringContainsString(TestNestedLeaf::class . '::$apiKey', $path);
+            $this->assertStringContainsString('Path:', $e->getMessage());
+        }
+    }
+
     public function testNestedCircularReferenceReportsTheChain(): void
     {
         $di = new Container();

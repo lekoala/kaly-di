@@ -207,7 +207,14 @@ class Container implements ContainerInterface
         $arguments = [];
         foreach ($configured as $paramName => $paramValue) {
             if ($paramValue instanceof Closure) {
-                $arguments[$paramName] = $paramValue($this);
+                try {
+                    $arguments[$paramName] = $paramValue($this);
+                } catch (UnresolvableParameterException $e) {
+                    // A configured closure can resolve a nested service. Prefix
+                    // the path with this configured parameter so it does not
+                    // lose the outer frame.
+                    throw $this->wrapUnresolvableParameter($e, $id, (string) $paramName);
+                }
                 continue;
             }
             $arguments[$paramName] = $paramValue;
@@ -218,21 +225,9 @@ class Container implements ContainerInterface
             /** @var array<string,mixed> */
             return Parameters::resolveParameters($constructorParameters, $arguments, $this);
         } catch (UnresolvableParameterException $e) {
-            // Rethrow with the exact Container error formatting. The immediate
-            // parameter name (not the nested one) and a structured path built
-            // from the cause chain keep the message faithful to the graph:
-            // `Root::$middle -> Middle::$leaf -> Leaf::$apiKey`.
-            $parameterName = $e->getParameterName();
-            $segment = $parameterName !== null ? "{$id}::\${$parameterName}" : $id;
-            $nestedPath = $e->getResolutionPath();
-            $path = $nestedPath !== null ? "{$segment} -> {$nestedPath}" : $segment;
-            $message = $parameterName !== null
-                ? "Unable to create object `{$id}`, cannot resolve parameter: `{$parameterName}`"
-                : "Unable to create object `{$id}`: {$e->getMessage()}";
-            if ($nestedPath !== null) {
-                $message .= "\nPath: {$path}";
-            }
-            throw new UnresolvableParameterException($message, 0, $e, $parameterName, $id, $path);
+            // Rethrow with the exact Container error formatting, using the
+            // immediate parameter name (not the nested one).
+            throw $this->wrapUnresolvableParameter($e, $id, $e->getParameterName());
         } catch (CircularReferenceException $e) {
             // Rethrow circular reference exceptions as-is
             throw $e;
@@ -243,6 +238,32 @@ class Container implements ContainerInterface
             $type = $e::class;
             throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
         }
+    }
+
+    /**
+     * Reformat an unresolvable parameter error, prefixing the structured path
+     * with this object and parameter:
+     * `Root::$middle -> Middle::$leaf -> Leaf::$apiKey`.
+     *
+     * The immediate parameter name (not the nested one) keeps the message
+     * faithful to the graph. Never derived from message text.
+     */
+    private function wrapUnresolvableParameter(
+        UnresolvableParameterException $e,
+        string $id,
+        ?string $parameterName,
+    ): UnresolvableParameterException {
+        $segment = $parameterName !== null ? "{$id}::\${$parameterName}" : $id;
+        $nestedPath = $e->getResolutionPath();
+        $path = $nestedPath !== null ? "{$segment} -> {$nestedPath}" : $segment;
+        $message = $parameterName !== null
+            ? "Unable to create object `{$id}`, cannot resolve parameter: `{$parameterName}`"
+            : "Unable to create object `{$id}`: {$e->getMessage()}";
+        if ($nestedPath !== null) {
+            $message .= "\nPath: {$path}";
+        }
+
+        return new UnresolvableParameterException($message, 0, $e, $parameterName, $id, $path);
     }
 
     /**

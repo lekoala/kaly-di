@@ -82,7 +82,9 @@ $a === $b; // false: two distinct shared instances
 When you actually want an alias, use `alias()`:
 
 ```php
-$definitions->alias(FooInterface::class, Foo::class);
+$definitions
+    ->set(Foo::class, Foo::class)
+    ->alias(FooInterface::class, Foo::class);
 
 $container->get(FooInterface::class) === $container->get(Foo::class); // true
 ```

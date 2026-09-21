@@ -6,6 +6,7 @@ namespace Kaly\Tests;
 
 use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
+use Kaly\Tests\Mocks\TestAlternativeObject;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObject2;
 use PHPUnit\Framework\TestCase;
@@ -38,6 +39,23 @@ class ProvenanceTest extends TestCase
         $definitions->rebind('service', TestObject2::class, source: 'demo');
 
         $this->assertSame(['initial' => 'billing', 'last' => 'demo'], $definitions->sourceFor('service'));
+    }
+
+    public function testSourceLessRebindClearsTheLastSource(): void
+    {
+        $definitions = Definitions::create()->set('service', TestObject::class, 'core');
+        $definitions->rebind('service', TestObject2::class, source: 'demo');
+        $definitions->rebind('service', TestAlternativeObject::class);
+
+        $this->assertSame(['initial' => 'core', 'last' => null], $definitions->sourceFor('service'));
+
+        try {
+            $definitions->set('service', TestObject::class);
+            $this->fail('Expected a DefinitionException');
+        } catch (DefinitionException $e) {
+            $this->assertStringContainsString('declared by `core`', $e->getMessage());
+            $this->assertStringNotContainsString('replaced by', $e->getMessage());
+        }
     }
 
     public function testDuplicateMessageIncludesSource(): void

@@ -423,11 +423,11 @@ final class Definitions
         );
 
         $this->values[$id] = $value;
-        if ($source !== null) {
-            // Preserve the initial provenance across replacements.
-            $initial = $this->sources[$id]['initial'] ?? null;
-            $this->sources[$id] = ['initial' => $initial, 'last' => $source];
-        }
+        // Preserve the initial provenance across replacements, but always record
+        // the latest replacement source: a source-less replacement must not keep
+        // claiming the previous one.
+        $initial = $this->sources[$id]['initial'] ?? null;
+        $this->sources[$id] = ['initial' => $initial, 'last' => $source];
         return $this;
     }
 

@@ -52,6 +52,9 @@ final class AliasValidator
     public static function assertValid(array $values, array $aliases, array $parameters, array $callbacks): void
     {
         foreach ($aliases as $alias => $target) {
+            // PHP turns numeric-string ids into int array keys; normalize before
+            // the typed lookups below (wouldCycle() requires a string).
+            $alias = (string) $alias;
             if (array_key_exists($alias, $parameters) || array_key_exists($alias, $callbacks)) {
                 throw new DefinitionException("`{$alias}` is an alias and cannot have parameters or callbacks.");
             }

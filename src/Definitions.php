@@ -54,6 +54,17 @@ final class Definitions
     private array $aliases = [];
 
     /**
+     * Optional provenance per id, for diagnostics only.
+     *
+     * The initial declaration source is preserved across rebind(), which only
+     * updates `last`. This is what lets an error explain "declared by X,
+     * replaced by Y".
+     *
+     * @var array<string,array{initial:?string,last:?string}>
+     */
+    private array $sources = [];
+
+    /**
      * Defines callbacks to be called after an object is instantiated
      *
      * @var array<string,array<string|int,Closure>>
@@ -123,7 +134,11 @@ final class Definitions
 
         if ($collisions !== []) {
             sort($collisions);
-            $list = implode("\n", array_map(static fn(string $id): string => "- {$id}", $collisions));
+            $incomingSources = $definitions->getSources();
+            $list = implode("\n", array_map(function (string $id) use ($incomingSources): string {
+                $incomingSource = $incomingSources[$id]['initial'] ?? $incomingSources[$id]['last'] ?? null;
+                return '- ' . $id . DefinitionGuard::describeSources($this->sources[$id] ?? [], $incomingSource);
+            }, $collisions));
             throw new DefinitionException(
                 "Cannot merge definitions: the following service ids are already defined:\n{$list}\n"
                 . 'Merge is additive and never overrides services. '
@@ -134,6 +149,7 @@ final class Definitions
         // Build the whole result first: a failed merge must leave this object untouched.
         $values = array_replace($this->values, $incoming);
         $aliases = array_replace($this->aliases, $incomingAliases);
+        $sources = array_replace($this->sources, $definitions->getSources());
 
         $callbacks = $this->callbacks;
         foreach ($definitions->getCallbacks() as $key => $entries) {
@@ -149,10 +165,29 @@ final class Definitions
 
         $this->values = $values;
         $this->aliases = $aliases;
+        $this->sources = $sources;
         $this->callbacks = $callbacks;
         $this->parameters = $parameters;
 
         return $this;
+    }
+
+    /**
+     * @return array<string,array{initial:?string,last:?string}>
+     */
+    public function getSources(): array
+    {
+        return $this->sources;
+    }
+
+    /**
+     * Provenance of an id (empty array when none was declared).
+     *
+     * @return array{initial?:?string,last?:?string}
+     */
+    public function sourceFor(string $id): array
+    {
+        return $this->sources[$id] ?? [];
     }
 
     /**
@@ -236,14 +271,16 @@ final class Definitions
      * Add an entry
      *
      * @param class-string|object $value
+     * @param string|null $source Optional provenance label, for diagnostics
      */
-    public function set(string $id, string|object $value): self
+    public function set(string $id, string|object $value, ?string $source = null): self
     {
         DefinitionGuard::assertNotLocked($this->locked);
-        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $id);
+        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $id);
         DefinitionGuard::assertUsableId($id);
         DefinitionGuard::assertValidDefinition($id, $value);
         $this->values[$id] = $value;
+        $this->sources[$id] = ['initial' => $source, 'last' => $source];
         return $this;
     }
 
@@ -252,15 +289,17 @@ final class Definitions
      *
      * @param class-string $abstract
      * @param class-string $concrete
+     * @param string|null $source Optional provenance label, for diagnostics
      */
-    public function bind(string $abstract, string $concrete): self
+    public function bind(string $abstract, string $concrete, ?string $source = null): self
     {
         DefinitionGuard::assertNotLocked($this->locked);
-        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $abstract);
+        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $abstract);
         assert(interface_exists($abstract) || class_exists($abstract), "Abstraction `{$abstract}` does not exist");
         assert(class_exists($concrete), "Class `{$concrete}` does not exist");
         assert(is_a($concrete, $abstract, true), "Class `{$concrete}` does not implement `{$abstract}`");
         $this->values[$abstract] = $concrete;
+        $this->sources[$abstract] = ['initial' => $source, 'last' => $source];
         return $this;
     }
 
@@ -279,7 +318,7 @@ final class Definitions
     public function alias(string $alias, string $target): self
     {
         DefinitionGuard::assertNotLocked($this->locked);
-        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $alias);
+        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $alias);
 
         if (!array_key_exists($target, $this->values) && !array_key_exists($target, $this->aliases)) {
             throw new DefinitionException(
@@ -352,9 +391,14 @@ final class Definitions
      *
      * @param class-string|object $value
      * @param class-string|object|null $expected Guard: the id must currently be defined as this exact value
+     * @param string|null $source Optional provenance label for this replacement
      */
-    public function rebind(string $id, string|object $value, string|object|null $expected = null): self
-    {
+    public function rebind(
+        string $id,
+        string|object $value,
+        string|object|null $expected = null,
+        ?string $source = null,
+    ): self {
         DefinitionGuard::assertNotLocked($this->locked);
         if (!array_key_exists($id, $this->values)) {
             throw new DefinitionException(
@@ -379,6 +423,11 @@ final class Definitions
         );
 
         $this->values[$id] = $value;
+        if ($source !== null) {
+            // Preserve the initial provenance across replacements.
+            $initial = $this->sources[$id]['initial'] ?? null;
+            $this->sources[$id] = ['initial' => $initial, 'last' => $source];
+        }
         return $this;
     }
 

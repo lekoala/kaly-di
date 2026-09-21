@@ -198,6 +198,21 @@ Parameters and callbacks keep their existing merge semantics (later values win
 per key): they customize a definition rather than choosing which implementation
 owns a service.
 
+### Provenance
+
+`set()`, `bind()` and `rebind()` accept an optional `source` label, used only for
+diagnostics. It lets collisions and replacements explain who owns what:
+
+```php
+$definitions->bind(StorageInterface::class, DatabaseStorage::class, source: 'core');
+$definitions->rebind(StorageInterface::class, InMemoryStorage::class, source: 'demo');
+```
+
+`rebind()` keeps the initial source and records the replacement, so an error can
+read `declared by \`core\`; replaced by \`demo\``. Sources are read back with
+`sourceFor()` / `getSources()`, never trigger autoload or reflection, and have no
+effect on resolution.
+
 ### Replacing a Definition
 
 `rebind()` is the only operation that deliberately replaces an existing service

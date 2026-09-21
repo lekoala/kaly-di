@@ -14,6 +14,10 @@ All notable changes to this project are documented in this file.
   target. The target is configured once (unlike a factory returning another entry,
   which runs its callbacks again). Aliases cannot carry parameters or callbacks,
   and alias cycles are rejected.
+- `set()`, `bind()` and `rebind()` accept an optional `source:` provenance label
+  (diagnostics only). `rebind()` preserves the initial source and records the
+  replacement; duplicates and merge collisions report both. Sources never trigger
+  autoload or reflection.
 - `UnresolvableParameterException` now exposes `getObjectId()` and a structured
   `getResolutionPath()`. Nested resolution messages name the immediate parameter
   (`cannot resolve parameter: leaf`) and the outermost exception carries the full

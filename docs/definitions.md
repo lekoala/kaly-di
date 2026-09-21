@@ -109,6 +109,12 @@ $definitions
 When an id is bound to a class, parameters can be declared for either the id or the
 concrete class. The id takes precedence.
 
+Every configured parameter name must match a constructor parameter of the class
+being built. A name that does not exist is a configuration error: it throws a
+`DefinitionException` at resolution time (before any parameter closure runs),
+instead of being silently ignored. The message lists the unknown names and the
+available ones.
+
 ### Referencing Container Services
 
 To pass a service from the container as a parameter, use a closure that receives the

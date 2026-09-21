@@ -291,6 +291,43 @@ class ContainerTest extends TestCase
         $di->get(PDO::class);
     }
 
+    public function testUnknownConfiguredParameterIsRejected(): void
+    {
+        $di = new Container(Definitions::create()->parameter(TestObject2::class, 'v2', 'x'));
+
+        try {
+            $di->get(TestObject2::class);
+            $this->fail('Expected a DefinitionException');
+        } catch (DefinitionException $e) {
+            $this->assertStringContainsString('v2', $e->getMessage());
+            $this->assertStringContainsString('Available', $e->getMessage());
+            $this->assertStringContainsString('`v`', $e->getMessage());
+        }
+    }
+
+    public function testUnknownConfiguredParameterIsRejectedBeforeParameterClosuresRun(): void
+    {
+        $called = false;
+        $mark = function () use (&$called): string {
+            $called = true;
+            return 'value';
+        };
+        $di = new Container(
+            Definitions::create()
+                ->parameter(TestObject2::class, 'v', $mark)
+                ->parameter(TestObject2::class, 'typo', $mark),
+        );
+
+        try {
+            $di->get(TestObject2::class);
+            $this->fail('Expected a DefinitionException');
+        } catch (DefinitionException $e) {
+            $this->assertStringContainsString('typo', $e->getMessage());
+        }
+
+        $this->assertFalse($called);
+    }
+
     /**
      * Exceptions thrown during the build process are wrapped in a ContainerException
      */

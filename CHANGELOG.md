@@ -38,6 +38,10 @@ rebind() is the only intentional replacement operation.
 - A factory returning anything other than an object or a class-string now throws a
   `DefinitionException` (previously an `assert()`, so it could pass silently in
   production).
+- Hardening: a configured parameter whose name does not exist on the constructor is
+  now rejected with a `DefinitionException` at resolution time, instead of being
+  silently ignored. The check runs before parameter closures are executed and lists
+  the unknown and available names.
 
 ### Documentation
 

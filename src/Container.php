@@ -196,8 +196,11 @@ class Container implements ContainerInterface
     private function resolveConstructorArguments(string $id, string $class, array $constructorParameters): array
     {
         // 1. Gather explicitly defined parameters for this class/id
+        $configured = $this->definitions->allParametersFor($class, $id);
+        $this->assertKnownParameters($id, $class, $configured, $constructorParameters);
+
         $arguments = [];
-        foreach ($this->definitions->allParametersFor($class, $id) as $paramName => $paramValue) {
+        foreach ($configured as $paramName => $paramValue) {
             if ($paramValue instanceof Closure) {
                 $arguments[$paramName] = $paramValue($this);
                 continue;
@@ -228,6 +231,58 @@ class Container implements ContainerInterface
             $type = $e::class;
             throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
         }
+    }
+
+    /**
+     * Reject configured parameters that do not exist on the constructor.
+     *
+     * The constructor signature is already loaded, so this costs nothing and
+     * needs no graph audit. It runs before parameter closures are executed so
+     * an already invalid configuration cannot trigger side effects.
+     *
+     * @param class-string $class
+     * @param array<string,mixed> $configured
+     * @param \ReflectionParameter[] $constructorParameters
+     * @throws DefinitionException
+     */
+    private function assertKnownParameters(
+        string $id,
+        string $class,
+        array $configured,
+        array $constructorParameters,
+    ): void {
+        $available = array_values(array_map(
+            static fn(\ReflectionParameter $p): string => $p->getName(),
+            $constructorParameters,
+        ));
+        $unknown = array_values(array_diff(array_keys($configured), $available));
+
+        if ($unknown === []) {
+            return;
+        }
+
+        sort($unknown);
+        $target = $id === $class ? "`{$class}`" : "`{$class}` (id `{$id}`)";
+        throw new DefinitionException(
+            'Unknown configured parameter(s) for '
+            . $target
+            . ': '
+            . self::quoteList($unknown)
+            . '. Available: '
+            . self::quoteList($available)
+            . '.',
+        );
+    }
+
+    /**
+     * @param list<string> $names
+     */
+    private static function quoteList(array $names): string
+    {
+        if ($names === []) {
+            return '(none)';
+        }
+        return implode(', ', array_map(static fn(string $name): string => "`{$name}`", $names));
     }
 
     /**

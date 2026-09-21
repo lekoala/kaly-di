@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Kaly\Di;
 
 use Closure;
-use LogicException;
 use Psr\Container\ContainerInterface;
 
 /**
@@ -17,8 +16,19 @@ use Psr\Container\ContainerInterface;
  *
  * The primitives are orthogonal: each method does exactly one thing.
  *
- * Configuration state such as locking is enforced at runtime, while
- * development-time validity checks use assert() where appropriate.
+ * Invalid configuration is reported in two ways, based on its cost:
+ *
+ * - Unconditional configuration invariants (locking, duplicate ids, merge
+ *   collisions, rebind preconditions, illegal factory results) always throw a
+ *   DefinitionException. They are already known and cheap to check, and must
+ *   behave identically whether or not assertions are enabled.
+ * - Checks that may autoload or reflect code the runtime might never use (class
+ *   existence, binding compatibility) use assert(). They give immediate
+ *   development feedback without forcing production to visit unused services.
+ *
+ * The real validation of a composition is its test suite: building each real
+ * configuration and resolving its real entry points exercises every visited
+ * path. Kaly deliberately does not audit the whole graph ahead of time.
  */
 final class Definitions
 {
@@ -86,7 +96,7 @@ final class Definitions
      * values win per key), since they customize a definition rather than
      * choosing which implementation owns a service.
      */
-    public function merge(Definitions $definitions): void
+    public function merge(Definitions $definitions): self
     {
         $this->ensureNotLocked();
 
@@ -96,7 +106,7 @@ final class Definitions
         if ($collisions !== []) {
             sort($collisions);
             $list = implode("\n", array_map(static fn(string $id): string => "- {$id}", $collisions));
-            throw new LogicException(
+            throw new DefinitionException(
                 "Cannot merge definitions: the following service ids are already defined:\n{$list}\n"
                 . 'Merge is additive and never overrides services. '
                 . 'Use rebind() explicitly for intentional replacements.',
@@ -112,6 +122,8 @@ final class Definitions
         foreach ($definitions->getParameters() as $key => $values) {
             $this->parameters[$key] = array_replace($this->parameters[$key] ?? [], $values);
         }
+
+        return $this;
     }
 
     /**
@@ -179,7 +191,14 @@ final class Definitions
         // If we have a closure, run it to get a string or an object
         if ($entry instanceof Closure) {
             $entry = $entry($container);
-            assert(is_object($entry) || is_string($entry));
+            if (!is_object($entry) && !is_string($entry)) {
+                throw new DefinitionException(
+                    "The factory registered for `{$id}` must return an object or a class-string, "
+                    . 'got '
+                    . get_debug_type($entry)
+                    . '.',
+                );
+            }
         }
         return $entry;
     }
@@ -193,6 +212,7 @@ final class Definitions
     {
         $this->ensureNotLocked();
         $this->ensureNotDefined($id);
+        $this->ensureUsableId($id);
         $this->assertValidDefinition($id, $value);
         $this->values[$id] = $value;
         return $this;
@@ -256,15 +276,18 @@ final class Definitions
     {
         $this->ensureNotLocked();
         if (!array_key_exists($id, $this->values)) {
-            throw new LogicException(
+            throw new DefinitionException(
                 "Cannot rebind `{$id}`: no existing definition was found. Define it first with set() or bind().",
             );
         }
         if ($expected !== null && $this->values[$id] !== $expected) {
             $current = $this->describeValue($this->values[$id]);
             $wanted = $this->describeValue($expected);
-            throw new LogicException("Cannot rebind `{$id}`: expected `{$wanted}`, currently defined as `{$current}`.");
+            throw new DefinitionException(
+                "Cannot rebind `{$id}`: expected `{$wanted}`, currently defined as `{$current}`.",
+            );
         }
+        $this->ensureUsableId($id);
         $this->assertValidDefinition($id, $value);
 
         if (interface_exists($id) || class_exists($id) && (new \ReflectionClass($id))->isAbstract()) {
@@ -399,7 +422,7 @@ final class Definitions
     private function ensureNotLocked(): void
     {
         if ($this->locked) {
-            throw new LogicException('Definitions are locked and cannot be modified.');
+            throw new DefinitionException('Definitions are locked and cannot be modified.');
         }
     }
 
@@ -409,20 +432,37 @@ final class Definitions
     private function ensureNotDefined(string $id): void
     {
         if (array_key_exists($id, $this->values)) {
-            throw new LogicException(
+            throw new DefinitionException(
                 "Service `{$id}` is already defined. Use rebind() if replacing it is intentional.",
             );
         }
     }
 
     /**
+     * Reject ids that would collide with a resolved stdClass value.
+     *
+     * A cheap, unconditional configuration invariant: no autoloading or
+     * reflection is required.
+     */
+    private function ensureUsableId(string $id): void
+    {
+        if ($id === \stdClass::class) {
+            throw new DefinitionException('Cannot set stdClass as id');
+        }
+    }
+
+    /**
+     * Development assertion: the value is an object or an existing class name.
+     *
+     * class_exists() may autoload the class, so this check must not run in
+     * production for services the runtime never visits. assertValidDefinition
+     * is therefore an assertion, not a runtime guarantee.
+     *
      * @param class-string|object $value
      */
     private function assertValidDefinition(string $id, string|object $value): void
     {
         assert(is_object($value) || class_exists($value), "Value for `{$id}` is not valid");
-        // Avoid resolving stdClass with the DI container
-        assert($id !== \stdClass::class, 'Cannot set stdClass as id');
     }
 
     /**

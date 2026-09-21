@@ -159,9 +159,9 @@ $definitions->callback(MyService::class, function (MyService $service, Container
 
 You can split your definitions across multiple files and merge them. Merging is
 **additive**: service definitions are never implicitly replaced. Merging two
-definitions that declare the same service id fails with a `LogicException`, even
-when both declare the exact same value: two modules that both declare a service
-own the same decision.
+definitions that declare the same service id fails with a `DefinitionException`,
+even when both declare the exact same value: two modules that both declare a
+service own the same decision.
 
 ```php
 $definitions1 = Definitions::create()->set('repository', UserRepository::class);
@@ -252,7 +252,8 @@ Use the named `expected:` argument so the intent stays obvious at the call site.
 
 Once a `Definitions` object is locked, it cannot be modified. This prevents runtime
 changes to the container configuration. Any mutator (`set()`, `bind()`, `rebind()`,
-`parameter()`, `parameters()`, `callback()`, `merge()`) then throws a `LogicException`.
+`parameter()`, `parameters()`, `callback()`, `merge()`) then throws a
+`DefinitionException`.
 
 Locking is enforced at runtime, whether or not assertions are enabled, so the
 guarantee holds in production too.
@@ -271,6 +272,63 @@ $container = Definitions::create()
     ->set(PDO::class, fn () => new PDO('sqlite::memory:'))
     ->createContainer();
 ```
+
+## Configuration Errors and Assertions
+
+Kaly DI puts each check where its cost is reasonable.
+
+**Unconditional configuration invariants** always throw a `DefinitionException`,
+whether or not assertions are enabled. They are already known and cheap to check,
+and require no autoloading or reflection:
+
+- mutating locked definitions,
+- defining the same id twice with `set()` or `bind()`,
+- a `merge()` collision,
+- rebinding an unknown id,
+- a `rebind()` `expected` precondition mismatch,
+- a factory returning something other than an object or a class-string (once it has
+  been executed).
+
+```php
+$definitions->bind(FooInterface::class, Foo::class);
+$definitions->bind(FooInterface::class, OtherFoo::class);
+// DefinitionException: Service `FooInterface` is already defined.
+```
+
+**Checks that may autoload or reflect code the runtime might never use** (class
+existence, binding compatibility, argument types) use PHP `assert()`. They give
+immediate feedback in development (`zend.assertions = 1`) and are disabled in
+production (`zend.assertions = -1`), so production never visits services it does
+not use.
+
+`DefinitionException` extends `LogicException` and also implements the PSR-11
+`ContainerExceptionInterface`, because it can surface from `Container::get()` — for
+instance when a factory returns an illegal value.
+
+## Testing the Composition
+
+There is no ahead-of-time graph audit. Kaly resolves only what is actually used, so
+the composition is validated by exercising it: build each real configuration and
+resolve its real entry points.
+
+```php
+public function testWebApplicationComposition(): void
+{
+    $container = webDefinitions()->createContainer();
+    $container->get(HttpKernel::class);
+}
+
+public function testWorkerComposition(): void
+{
+    $container = workerDefinitions()->createContainer();
+    $container->get(Worker::class);
+}
+```
+
+This covers the compositions and entry points actually exercised. A factory with a
+runtime-dependent branch, or a dynamically computed id, can still introduce a path
+your tests did not take; the goal is to cover real configurations, not to prove the
+whole graph.
 
 ## The Container Is Not Registered By Default
 

@@ -99,7 +99,7 @@ class Container implements ContainerInterface
 
             return $instance;
         } catch (
-            ReferenceNotFoundException|CircularReferenceException|UnresolvableParameterException|ContainerException $e
+            DefinitionException|ReferenceNotFoundException|CircularReferenceException|UnresolvableParameterException|ContainerException $e
         ) {
             // Preserve our own exceptions, wrap any other (including third-party PSR ones)
             throw $e;

@@ -199,15 +199,29 @@ Kaly DI intentionally avoids "magic" attributes. This keeps domain code complete
 decoupled from the DI infrastructure. All wiring is done in PHP code, which is easier
 to debug, refactor, and type-check.
 
-### Assertions for Development
+### Configuration Errors and Assertions
 
-Development-time validation (type checks, class existence, binding compatibility) is
-performed using PHP `assert()`. This provides excellent feedback during development
-(`zend.assertions = 1`) but ensures zero overhead in production (`zend.assertions = -1`).
+Kaly DI separates two kinds of checks:
 
-Runtime guarantees, by contrast, are enforced with real exceptions and hold regardless
-of assertion settings: locking throws a `LogicException`, and a missing id throws a
-`ReferenceNotFoundException`.
+- **Unconditional configuration invariants** throw a `DefinitionException`
+  regardless of assertion settings: locking, duplicate ids, `merge()` collisions,
+  `rebind()` preconditions, and illegal factory results. They are already known and
+  cheap to check.
+- **Checks that may autoload or reflect code the runtime might never use** (class
+  existence, binding compatibility, argument types) use PHP `assert()`. They give
+  feedback during development (`zend.assertions = 1`) and cost nothing in production
+  (`zend.assertions = -1`), so production never visits services it does not use.
+
+A missing id still throws a `ReferenceNotFoundException` at resolution time.
+
+### No ahead-of-time graph audit
+
+Kaly deliberately does not validate the whole graph before building the container.
+Resolving only what is actually used is a feature: services that are never requested
+are never autoloaded, reflected or instantiated. The composition is instead validated
+by tests that build each real configuration and resolve its real entry points. This
+covers the compositions and entry points actually exercised, without maintaining a
+parallel static resolver that could drift from runtime behavior.
 
 ### No Native Lazy Objects
 
@@ -225,6 +239,10 @@ All library exceptions implement `Psr\Container\ContainerExceptionInterface`.
 `ReferenceNotFoundException` additionally implements `NotFoundExceptionInterface`
 (which itself extends `ContainerExceptionInterface`).
 
+- **`DefinitionException`**: Invalid configuration or composition (locking, duplicate
+  ids, merge collisions, rebind preconditions, illegal factory results). Extends
+  `LogicException` and implements `ContainerExceptionInterface`, since it can surface
+  from `Container::get()`.
 - **`ContainerException`**: General container error.
 - **`ReferenceNotFoundException`**: Thrown when a service id is requested but not found.
 - **`CircularReferenceException`**: Thrown when a dependency chain loops back on itself.

@@ -20,6 +20,7 @@ container itself.
 - **No Attributes, No Magic:** plain PHP configuration, no attributes or compilation.
 - **Strongly Typed Definitions:** define dependencies in PHP for full IDE support.
 - **Fail-fast composition:** duplicate service definitions are rejected; intentional overrides use `rebind()`.
+- **Predictable errors:** configuration invariants throw `DefinitionException`; development-only checks use `assert()`.
 - **Autowiring:** concrete classes are resolved automatically; bind interfaces when needed.
 - **Predictable `has()`:** true for explicit definitions/bindings or instantiable concrete classes; constructor resolution may still fail in `get()`.
 - **Explicit Lifecycle:** `Container::get()` returns shared services, `Injector::make()` instantiates fresh concrete classes.
@@ -91,18 +92,45 @@ deliberately not part of the public API: unlike the legacy permissive resolver,
 it never invents `''/0/false/[]` defaults and throws
 `UnresolvableParameterException` for required parameters that cannot be satisfied.
 
-## A Note on Assertions
+## Configuration Errors, Assertions and Composition Tests
 
-Kaly DI distinguishes runtime guarantees from development-time validation:
+Kaly DI puts each check where its cost is reasonable:
 
-- **Runtime guarantees** (locking) throw real
-  exceptions and therefore always hold, even in production.
-- **Development-time validation** (class existence, binding compatibility, argument
-  types) uses PHP `assert()`. These checks run in development
-  (`zend.assertions = 1`) but are disabled in production (`zend.assertions = -1`)
-  for zero overhead.
+- **Unconditional configuration invariants** always throw a `DefinitionException`,
+  whether or not assertions are enabled: mutating locked definitions, defining the
+  same id twice, a `merge()` collision, rebinding an unknown id, a `rebind()`
+  precondition mismatch, or a factory returning an illegal value once it has run.
+  These facts are already known and cheap to check.
+- **Checks that may autoload or reflect code the runtime might never use** (class
+  existence, binding compatibility, argument types) use PHP `assert()`. They run in
+  development (`zend.assertions = 1`) and are disabled in production
+  (`zend.assertions = -1`), so production never visits services it does not use.
+- **The composition is validated by its tests.** There is no ahead-of-time graph
+  audit: Kaly resolves only what is actually used. Build each real configuration and
+  resolve its real entry points instead:
 
-Ensure your test suite covers your DI configuration to catch mistakes before deployment.
+```php
+public function testWebApplicationComposition(): void
+{
+    $container = webDefinitions()->createContainer();
+    $container->get(HttpKernel::class);
+}
+
+public function testWorkerComposition(): void
+{
+    $container = workerDefinitions()->createContainer();
+    $container->get(Worker::class);
+}
+```
+
+This covers the compositions and entry points actually exercised. A factory with a
+runtime-dependent branch, or a dynamically computed id, can still introduce a path
+your tests did not take; the goal is to cover real configurations, not to prove the
+whole graph.
+
+`DefinitionException` extends `LogicException` and also implements the PSR-11
+`ContainerExceptionInterface`, because it can surface from `Container::get()` — for
+instance when a factory returns something other than an object or a class-string.
 
 ## Examples and Testing
 

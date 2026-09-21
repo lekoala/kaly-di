@@ -6,6 +6,7 @@ namespace Kaly\Tests;
 
 use AssertionError;
 use Kaly\Di\Container;
+use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Tests\Mocks\TestAltInterface;
 use Kaly\Tests\Mocks\TestApp;
@@ -14,7 +15,6 @@ use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObject2;
 use Kaly\Tests\Mocks\TestObject5;
-use LogicException;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use ReflectionMethod;
@@ -230,7 +230,7 @@ class DefinitionsTest extends TestCase
         $this->assertTrue($def->isLocked());
 
         // Mutating a locked definitions object throws, even without assertions
-        $this->expectException(LogicException::class);
+        $this->expectException(DefinitionException::class);
         $this->expectExceptionMessage('locked and cannot be modified');
         $def->set('something', TestObject::class);
     }

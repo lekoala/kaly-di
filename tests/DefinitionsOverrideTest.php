@@ -6,12 +6,12 @@ namespace Kaly\Tests;
 
 use AssertionError;
 use Closure;
+use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Tests\Mocks\TestAlternativeObject;
 use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObject2;
-use LogicException;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -26,7 +26,7 @@ class DefinitionsOverrideTest extends TestCase
     {
         $def = Definitions::create()->set('service', TestObject::class);
 
-        $this->expectException(LogicException::class);
+        $this->expectException(DefinitionException::class);
         $this->expectExceptionMessage('rebind');
         $def->set('service', TestObject2::class);
     }
@@ -35,7 +35,7 @@ class DefinitionsOverrideTest extends TestCase
     {
         $def = Definitions::create()->bind(TestInterface::class, TestObject::class);
 
-        $this->expectException(LogicException::class);
+        $this->expectException(DefinitionException::class);
         $this->expectExceptionMessage('rebind');
         $def->bind(TestInterface::class, TestAlternativeObject::class);
     }
@@ -48,7 +48,7 @@ class DefinitionsOverrideTest extends TestCase
                 TestAlternativeObject::class,
             );
             $this->fail('bind() must reject an id already registered with set()');
-        } catch (LogicException $e) {
+        } catch (DefinitionException $e) {
             $this->assertStringContainsString('rebind', $e->getMessage());
         }
 
@@ -58,7 +58,7 @@ class DefinitionsOverrideTest extends TestCase
                 TestAlternativeObject::class,
             );
             $this->fail('set() must reject an id already registered with bind()');
-        } catch (LogicException $e) {
+        } catch (DefinitionException $e) {
             $this->assertStringContainsString('rebind', $e->getMessage());
         }
     }
@@ -86,7 +86,7 @@ class DefinitionsOverrideTest extends TestCase
     {
         $def = Definitions::create();
 
-        $this->expectException(LogicException::class);
+        $this->expectException(DefinitionException::class);
         $this->expectExceptionMessage('no existing definition');
         $def->rebind('mailer', TestObject::class);
     }
@@ -120,7 +120,7 @@ class DefinitionsOverrideTest extends TestCase
         $base = Definitions::create()->set('mailer', TestObject::class);
         $incoming = Definitions::create()->set('mailer', TestObject2::class);
 
-        $this->expectException(LogicException::class);
+        $this->expectException(DefinitionException::class);
         $this->expectExceptionMessage('rebind');
         $base->merge($incoming);
     }
@@ -130,7 +130,7 @@ class DefinitionsOverrideTest extends TestCase
         $base = Definitions::create()->set('mailer', TestObject::class);
         $incoming = Definitions::create()->set('mailer', TestObject::class);
 
-        $this->expectException(LogicException::class);
+        $this->expectException(DefinitionException::class);
         $base->merge($incoming);
     }
 
@@ -149,7 +149,7 @@ class DefinitionsOverrideTest extends TestCase
         try {
             $base->merge($incoming);
             $this->fail('A conflicting merge must throw');
-        } catch (LogicException $e) {
+        } catch (DefinitionException $e) {
             $this->assertStringContainsString('rebind', $e->getMessage());
         }
 
@@ -172,6 +172,16 @@ class DefinitionsOverrideTest extends TestCase
         $this->assertSame(TestObject2::class, $base->get('b'));
     }
 
+    public function testMergeIsFluent(): void
+    {
+        $base = Definitions::create();
+
+        $result = $base->merge(Definitions::create()->set('a', TestObject::class));
+
+        $this->assertSame($base, $result);
+        $this->assertTrue($base->has('a'));
+    }
+
     public function testRebindWithMatchingExpectedReplacesDefinition(): void
     {
         $def = Definitions::create()->bind(TestInterface::class, TestObject::class);
@@ -188,7 +198,7 @@ class DefinitionsOverrideTest extends TestCase
         try {
             $def->rebind(TestInterface::class, TestAlternativeObject::class, expected: TestObject2::class);
             $this->fail('A mismatched expected precondition must be rejected');
-        } catch (LogicException $e) {
+        } catch (DefinitionException $e) {
             $this->assertStringContainsString('expected', $e->getMessage());
             $this->assertStringContainsString('currently defined', $e->getMessage());
         }
@@ -209,7 +219,7 @@ class DefinitionsOverrideTest extends TestCase
         try {
             $def->rebind('alternative', $first, expected: $first);
             $this->fail('expected must compare identity, not class or equality');
-        } catch (LogicException $e) {
+        } catch (DefinitionException $e) {
             $this->assertStringContainsString('TestAlternativeObject#', $e->getMessage());
         }
     }
@@ -226,7 +236,7 @@ class DefinitionsOverrideTest extends TestCase
         try {
             $def->rebind('service', $factory, expected: $factory);
             $this->fail('expected must compare closure identity');
-        } catch (LogicException $e) {
+        } catch (DefinitionException $e) {
             $this->assertStringContainsString('Closure#', $e->getMessage());
         }
     }
@@ -241,7 +251,7 @@ class DefinitionsOverrideTest extends TestCase
         try {
             $def->rebind(TestInterface::class, TestObject::class, expected: TestObject::class);
             $this->fail('A stale expected precondition must be rejected');
-        } catch (LogicException $e) {
+        } catch (DefinitionException $e) {
             $this->assertStringContainsString('expected', $e->getMessage());
             $this->assertStringContainsString('currently defined', $e->getMessage());
         }
@@ -256,7 +266,7 @@ class DefinitionsOverrideTest extends TestCase
             // the stale precondition is reported first.
             $def->rebind(TestInterface::class, TestObject2::class, expected: TestAlternativeObject::class);
             $this->fail('A stale expected precondition must be rejected');
-        } catch (LogicException $e) {
+        } catch (DefinitionException $e) {
             $this->assertStringContainsString('expected', $e->getMessage());
         }
 

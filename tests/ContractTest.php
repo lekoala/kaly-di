@@ -7,6 +7,7 @@ namespace Kaly\Tests;
 use Kaly\Di\CircularReferenceException;
 use Kaly\Di\Container;
 use Kaly\Di\ContainerException;
+use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Di\Injector;
 use Kaly\Di\ReferenceNotFoundException;
@@ -166,7 +167,7 @@ class ContractTest extends TestCase
 
         $overlay = Definitions::create()->bind(TestInterface::class, TestAlternativeObject::class);
 
-        $this->expectException(LogicException::class);
+        $this->expectException(DefinitionException::class);
         $this->expectExceptionMessage('rebind');
 
         $app->merge($overlay);

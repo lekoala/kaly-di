@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestObject;
-use LogicException;
 use PHPUnit\Framework\TestCase;
 
 class DefinitionsLockTest extends TestCase
@@ -29,7 +29,7 @@ class DefinitionsLockTest extends TestCase
             try {
                 $mutator($definitions);
                 $this->fail("{$name} must reject locked definitions");
-            } catch (LogicException $e) {
+            } catch (DefinitionException $e) {
                 $this->assertStringContainsString('locked', $e->getMessage(), $name);
             }
         }

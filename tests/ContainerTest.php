@@ -4,10 +4,10 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
-use AssertionError;
 use Kaly\Di\CircularReferenceException;
 use Kaly\Di\Container;
 use Kaly\Di\ContainerException;
+use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Di\ReferenceNotFoundException;
 use Kaly\Di\UnresolvableParameterException;
@@ -138,7 +138,7 @@ class ContainerTest extends TestCase
         $this->assertInstanceOf(stdClass::class, $inst);
 
         // You cannot use stdClass as id
-        $this->expectException(AssertionError::class);
+        $this->expectException(DefinitionException::class);
         $di = new Container([
             stdClass::class => TestObject::class,
         ]);

@@ -256,8 +256,8 @@ objects such as `NotificationConfig`, `DatabaseConfig` or `StorageConfig`.
 | `#[Autowire('%env(FOO)%')]`           | Resolve `FOO` at boot + `parameters()`      |
 | `#[Autowire('%some.parameter%')]`     | PHP value + `parameters()`                  |
 | Parameter file / `services.yaml`      | PHP constant / configuration at root        |
-| `%env(int:PORT)%`                     | `(int)` conversion at boot                  |
-| `%env(bool:FEATURE)%`                 | `filter_var(..., FILTER_VALIDATE_BOOLEAN)`  |
+| `%env(int:PORT)%`                     | Validated int conversion at boot (below)    |
+| `%env(bool:FEATURE)%`                 | Validated bool conversion at boot (below)   |
 | Service binding                       | `Definitions::bind()`                       |
 | Explicit service                      | `Definitions::set()`                        |
 | Per-service scalar arguments          | `Definitions::parameters()`                 |
@@ -266,6 +266,26 @@ objects such as `NotificationConfig`, `DatabaseConfig` or `StorageConfig`.
 The goal is not to recreate a parameter system inside Kaly DI. The goal is
 to turn external configuration into normal typed PHP values **before** they
 enter the dependency graph.
+
+## Convert types with explicit rejection
+
+A bare `(int)` cast or `filter_var()` without a failure check silently turns
+an invalid value into `0` or `false`. Validate at boot and reject what does
+not parse, so a misconfigured deployment fails before any service is built:
+
+```php
+$portRaw = $requiredEnv('PORT');
+if (!ctype_digit($portRaw)) {
+    throw new RuntimeException("PORT must be a positive integer, got '{$portRaw}'.");
+}
+$port = (int) $portRaw;
+
+$featureRaw = $requiredEnv('FEATURE_FLAG');
+$feature = filter_var($featureRaw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+if ($feature === null) {
+    throw new RuntimeException("FEATURE_FLAG must be a boolean value, got '{$featureRaw}'.");
+}
+```
 
 ## Complete example
 

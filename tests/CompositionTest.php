@@ -71,12 +71,20 @@ class CompositionTest extends TestCase
     public function testDefinitionsParametersAreNotAppliedToTheMakeRoot(): void
     {
         $container = Definitions::create()
+            ->bind(CompositionRendererInterface::class, CompositionNativeRenderer::class)
+            ->bind(CompositionTranslatorInterface::class, CompositionTranslator::class)
             ->parameters(CompositionReportComposer::class, from: 'configured', defaultLocale: 'en')
             ->createContainer();
         $injector = new Injector($container);
 
-        $this->expectException(UnresolvableParameterException::class);
-        $injector->make(CompositionReportComposer::class);
+        // Both object dependencies are resolvable: the failure must happen on
+        // the scalar, proving Definitions parameters are ignored for the root.
+        try {
+            $injector->make(CompositionReportComposer::class);
+            $this->fail('Expected an UnresolvableParameterException');
+        } catch (UnresolvableParameterException $e) {
+            $this->assertSame('from', $e->getParameterName());
+        }
     }
 }
 

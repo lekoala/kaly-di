@@ -236,12 +236,12 @@ already produced: dependencies built earlier in the chain stay cached, side
 effects persist, and an instance provided directly stays as it was left. The
 cycle guard marks each call individually and only clears its own marker: a
 recursive call rejected by the guard never disturbs the outer call's marker.
-The guard remembers the owning context (current Fiber, or the main context):
-the same context asking again is a `CircularReferenceException` (the reported
-chain only contains that context's own resolutions), while another context
-asking means the owner's resolution suspended and throws a
-`ConcurrentResolutionException` instead — a conflict diagnostic for the
-synchronous contract, not an atomicity mechanism. See [async](./async.md).
+A service requested while it is already being resolved throws a
+`CircularReferenceException` showing the resolution chain: without the guard,
+a cycle would recurse until resources run out instead of failing immediately
+with an understandable error. Since resolution must stay synchronous, a
+forbidden suspension during construction surfaces through the same guard.
+See [async](./async.md).
 
 ### No Attributes or Annotations
 
@@ -303,6 +303,5 @@ All library exceptions implement `Psr\Container\ContainerExceptionInterface`.
   from `Container::get()`.
 - **`ContainerException`**: General container error.
 - **`ReferenceNotFoundException`**: Thrown when a service id is requested but not found.
-- **`CircularReferenceException`**: Thrown when a dependency chain loops back on itself.
-- **`ConcurrentResolutionException`**: Thrown when another execution context requests a service that is already being resolved — the owner's resolution suspended, which the synchronous contract forbids.
+- **`CircularReferenceException`**: Thrown when a dependency chain loops back on itself — or when a service is requested reentrantly while already being resolved. Resolution must stay synchronous (see [async](./async.md)).
 - **`UnresolvableParameterException`**: Thrown when a required parameter cannot be resolved.

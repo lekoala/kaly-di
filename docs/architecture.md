@@ -163,9 +163,11 @@ explicitly configured. The corresponding user-visible invariants are locked by
 ### Container lifetime
 
 A container's lifetime is the lifetime of its shared services: every entry returned
-by `get()` is cached for as long as the container instance lives.
+by `get()` is cached for as long as the container instance lives. Whether an
+entry is shared therefore depends on how long its container lives.
 
-For a long-running worker, a single container can serve the whole process:
+For long-running workers, the recommended model is a single shared application
+container serving the whole process:
 
 ```php
 $container = new Container($definitions);
@@ -173,7 +175,11 @@ $container = new Container($definitions);
 // get() services stay shared for the lifetime of this container
 ```
 
-For request isolation, create a new container per request:
+Request-scoped state never lives on those shared services: it is passed
+explicitly to fresh objects built with `Injector::make()`. See
+[async](./async.md).
+
+When request isolation is required instead, create a new container per request:
 
 ```php
 foreach ($requests as $request) {
@@ -271,9 +277,13 @@ While PHP 8.4 introduced native Lazy Objects, Kaly DI explicitly chooses not to
 implement them. The container focuses on modern, long-running architectures (like
 FrankenPHP, Swoole, or RoadRunner) where applications boot once and services are
 resolved and cached in memory. Because singletons are already kept alive, the
-boot-time performance benefit of lazy loading is negligible. Forcing dependency
-instantiation immediately also enforces application correctness by failing fast on
-misconfigured graphs.
+boot-time performance benefit of lazy loading is negligible.
+
+Services are still built lazily, on the first `get()` that requests them — not
+eagerly at boot. Only that requested construction is immediate: asking for a
+service builds it (and its dependencies) right away, which fails fast on
+misconfigured graphs. See [async](./async.md) for blocking initialization at
+boot versus lazy construction.
 
 ## Exception Hierarchy
 

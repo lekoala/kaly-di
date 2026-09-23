@@ -62,9 +62,26 @@ $fresh = $injector->make(MyService::class);
 $container->get(Foo::class);   // shared instance, configured by Definitions
 $injector->make(Foo::class);   // fresh concrete instance, independent of Definitions
 ```
-
 - `Container::get()` resolves configured container entries (definitions, bindings, objects, factories). Entries are shared: two calls with the same id return the same object.
 - `Injector::make()` instantiates a concrete class independently of container definitions. It uses PSR-11 only to resolve the object dependencies of that class. An interface or abstract class cannot be built with `make()`.
+
+## Autowire objects; configure values
+
+Object dependencies are resolved by type. Scalar configuration is provided
+explicitly at the composition root:
+
+```php
+$definitions = Definitions::create()
+    ->bind(LoggerInterface::class, FileLogger::class)
+    ->parameters(LogWriter::class, path: '/var/log/app.log', retries: 3);
+
+$container = new Container($definitions);
+$writer = $container->get(LogWriter::class);
+```
+
+Read the environment at boot, convert it to plain PHP values, then forget it
+came from the environment. See
+[**Configuration**](./docs/configuration.md) for the full migration guide.
 
 ## Documentation
 
@@ -72,6 +89,8 @@ Detailed guides are available in the `docs/` directory:
 
 - [**Definitions**](./docs/definitions.md): bindings, parameters, callbacks and merging.
 - [**Injector**](./docs/injector.md): building fresh instances and invoking callables.
+- [**Configuration**](./docs/configuration.md): scalar values, environment and migration without attributes.
+- [**Async**](./docs/async.md): synchronous resolution, shared services and long-lived processes.
 - [**Architecture**](./docs/architecture.md): design decisions and the PSR-11 boundary.
 
 ## Reflection Helpers

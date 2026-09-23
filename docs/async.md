@@ -72,7 +72,8 @@ $repository->find(...); // may suspend the current Fiber
 
 There is intentionally no `AsyncContainer`, no `Promise<Service>`, no
 `FiberScope` and no waiting on another context: a conflicting concurrent
-resolution fails fast instead of turning the container into a scheduler.
+resolution fails fast with a `ConcurrentResolutionException` instead of
+turning the container into a scheduler.
 A factory that suspends and resumes without any other context requesting the
 same service still violates the contract, but cannot be detected: the guard
 is a conflict diagnostic, not an atomicity mechanism.

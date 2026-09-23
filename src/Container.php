@@ -38,7 +38,15 @@ class Container implements ContainerInterface
     ];
 
     /**
-     * @var array<string,true>
+     * Owner of each service currently being built: the building Fiber, or
+     * null for the main execution context.
+     *
+     * The same context asking again is a cycle; another context asking means
+     * the owner's resolution suspended, which the synchronous contract
+     * forbids. array_key_exists() — not isset() — is required here since the
+     * main-context marker is null.
+     *
+     * @var array<string,?\Fiber<mixed,mixed,mixed,mixed>>
      */
     protected array $building = [];
 
@@ -99,14 +107,30 @@ class Container implements ContainerInterface
         // Guard the whole resolution: factory closures, constructor and callbacks.
         // Rejected before the marker is set: a recursive call refused here must
         // not touch the marker owned by the outer call.
+        $owner = \Fiber::getCurrent();
         if (array_key_exists($id, $this->building)) {
-            $buildChain = implode(', ', array_keys($this->building));
-            throw new CircularReferenceException("Circular reference to `{$id}` in `{$buildChain}`");
+            if ($this->building[$id] === $owner) {
+                // Same-context cycle: only show this context's own chain so
+                // independent resolutions are never mixed into the message.
+                $chain = [];
+                foreach ($this->building as $buildingId => $buildingOwner) {
+                    if ($buildingOwner === $owner) {
+                        $chain[] = $buildingId;
+                    }
+                }
+                $buildChain = implode(', ', $chain);
+                throw new CircularReferenceException("Circular reference to `{$id}` in `{$buildChain}`");
+            }
+            throw new ConcurrentResolutionException(
+                "Service `{$id}` is already being resolved in another execution context. "
+                . 'Kaly DI resolution is synchronous and must not suspend: move async I/O out of '
+                . 'factories, constructors, parameter closures and configuration callbacks.',
+            );
         }
 
         // Marker set before the try: the finally below only ever cleans the
         // marker of its own call.
-        $this->building[$id] = true;
+        $this->building[$id] = $owner;
 
         try {
             // A cached instance does not exist yet: build, configure and cache it
@@ -120,7 +144,7 @@ class Container implements ContainerInterface
 
             return $instance;
         } catch (
-            DefinitionException|ReferenceNotFoundException|CircularReferenceException|UnresolvableParameterException|ContainerException $e
+            DefinitionException|ReferenceNotFoundException|CircularReferenceException|ConcurrentResolutionException|UnresolvableParameterException|ContainerException $e
         ) {
             // Preserve our own exceptions, wrap any other (including third-party PSR ones)
             throw $e;
@@ -128,7 +152,12 @@ class Container implements ContainerInterface
             $type = $e::class;
             throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
         } finally {
-            unset($this->building[$id]);
+            // Only the owner clears its marker: a refused concurrent call never
+            // reaches the try, and this identity check protects the marker even
+            // if the code above ever changes.
+            if (array_key_exists($id, $this->building) && $this->building[$id] === $owner) {
+                unset($this->building[$id]);
+            }
         }
     }
 
@@ -192,10 +221,14 @@ class Container implements ContainerInterface
 
         $arguments = $this->resolveConstructorArguments($id, $class, $constructorParameters);
 
-        // Wrap any exception in a ContainerException
+        // Wrap any exception in a ContainerException, except the resolution
+        // diagnostics: a nested get() called from a constructor body must stay
+        // identifiable instead of being wrapped.
         try {
             /** @var object $instance */
             $instance = $reflection->newInstanceArgs($arguments);
+        } catch (CircularReferenceException|ConcurrentResolutionException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             $type = $e::class;
             throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);

@@ -83,4 +83,28 @@ class ReflectionTest extends TestCase
             $this->assertNull(Reflection::getParameterClass($param));
         }
     }
+
+    public function testGetParameterTypeName(): void
+    {
+        $method = (new ReflectionClass(ReflTestMock::class))->getMethod('someMethod');
+        $params = $method->getParameters();
+
+        // string|int union: no class name
+        $this->assertNull(Reflection::getParameterTypeName($params[0]));
+        // untyped: no class name
+        $this->assertNull(Reflection::getParameterTypeName($params[1]));
+        // stdClass
+        $this->assertSame(stdClass::class, Reflection::getParameterTypeName($params[2]));
+        // intersection: no single name
+        $this->assertNull(Reflection::getParameterTypeName($params[3]));
+        // ?stdClass nullable
+        $this->assertSame(stdClass::class, Reflection::getParameterTypeName($params[4]));
+        // int builtin
+        $this->assertNull(Reflection::getParameterTypeName($params[5]));
+
+        // union with a class member: first non-builtin wins
+        $constructor = (new ReflectionClass(TestUnionClass::class))->getConstructor();
+        $this->assertNotNull($constructor);
+        $this->assertSame(TestObject::class, Reflection::getParameterTypeName($constructor->getParameters()[0]));
+    }
 }

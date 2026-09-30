@@ -26,7 +26,7 @@ The library is composed of six main classes:
 3. **`Parameters`** *(internal)*: A static helper using Reflection to analyze callables and match types with container entries.
 4. **`Injector`**: A standalone utility for creating fresh instances and invoking callables. It depends only on PSR-11.
 5. **`ReflectionCache`** *(internal)*: Caches immutable reflection metadata (constructor signatures and class hierarchy) for the duration of the process.
-6. **`Reflection`** *(@api)*: Pure reflection helpers with no container dependency (`getParameterClass`, `getClassName`, `getShortClassName`, `getClassNamespace`). Safe to use anywhere.
+6. **`Reflection`** *(@api)*: Pure reflection helpers with no container dependency (`getParameterTypeName`, `getParameterClass`, `getClassName`, `getShortClassName`, `getClassNamespace`). Safe to use anywhere.
 
 ## Design Decisions
 

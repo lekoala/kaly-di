@@ -102,6 +102,7 @@ use Kaly\Di\Reflection;
 
 Reflection::getShortClassName($object); // e.g. "MyService"
 Reflection::getClassNamespace(MyService::class); // e.g. "App\Service"
+Reflection::getParameterTypeName($reflectionParameter); // ?class-string
 Reflection::getParameterClass($reflectionParameter); // ?ReflectionClass
 ```
 

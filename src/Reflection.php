@@ -22,6 +22,27 @@ use ReflectionParameter;
 final class Reflection
 {
     /**
+     * The first non-builtin named type of a parameter, without instantiating
+     * a ReflectionClass.
+     *
+     * On a union, the first non-builtin named type wins. An intersection has
+     * no single class, so null is returned.
+     *
+     * @return class-string|null
+     */
+    public static function getParameterTypeName(ReflectionParameter $param): ?string
+    {
+        foreach (Parameters::getParameterTypes($param) as $type) {
+            if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
+                /** @var class-string $name */
+                $name = $type->getName();
+                return $name;
+            }
+        }
+        return null;
+    }
+
+    /**
      * Resolve the class of a parameter, skipping builtin types.
      *
      * On a union, the first non-builtin named type wins. An intersection has
@@ -33,14 +54,8 @@ final class Reflection
      */
     public static function getParameterClass(ReflectionParameter $param): ?ReflectionClass
     {
-        foreach (Parameters::getParameterTypes($param) as $type) {
-            if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-                /** @var class-string $name */
-                $name = $type->getName();
-                return new ReflectionClass($name);
-            }
-        }
-        return null;
+        $name = self::getParameterTypeName($param);
+        return $name === null ? null : new ReflectionClass($name);
     }
 
     /**

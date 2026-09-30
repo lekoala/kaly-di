@@ -4,11 +4,17 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.3.2]
+
 ### Added
 
 - `Reflection::getParameterTypeName()`: the first non-builtin named type of a
   parameter as a `class-string`, without instantiating a `ReflectionClass`.
   `getParameterClass()` now delegates to it.
+
+## [0.3.1]
+
+*Removed*
 
 ## [0.3.0]
 

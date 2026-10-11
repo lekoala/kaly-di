@@ -23,12 +23,15 @@ All notable changes to this project are documented in this file.
   parameters and callbacks registered as `'\Foo'` now belong to `Foo`. A
   namespaced class id written with a different case fails an assertion in
   development. Short custom ids (`'closure'`) are still matched exactly.
-- `stdClass` is rejected as an id in any spelling (`'\stdClass'`, `'stdclass'`).
+- `stdClass` is rejected as an id or an alias in any spelling (`'\stdClass'`,
+  `'stdclass'`).
 - A missing entry looked up by a factory, a parameter closure or a callback now
   surfaces as a `ContainerException` (previous: the `ReferenceNotFoundException`).
   `NotFoundExceptionInterface` is reserved for the requested id (PSR-11).
-- An entry registered under a class or an interface must produce an instance of
-  it: `get()` throws a `DefinitionException` otherwise, and `set()`/`rebind()`
+- An entry registered under a class or an interface, directly or as an alias,
+  must produce an instance of it: `get()` throws a `DefinitionException`
+  otherwise, also when assertions are disabled and the id is not loaded yet
+  (it is autoloaded when its service is resolved). `set()`/`rebind()` already
   assert it in development. Remapping a class id to an unrelated class is no
   longer allowed: use a custom id.
 - `composer/ca-bundle` is no longer a dev dependency.

@@ -88,9 +88,12 @@ class Container implements ContainerInterface
             return $this->instances[$id] = $this->get($canonical);
         }
 
-        // An alias delegates to its target: same instance, configured once.
+        // An alias delegates to its target: same instance, configured once,
+        // but it must still honor its own id when that id names a class.
         if ($this->definitions->hasAlias($id)) {
-            return $this->instances[$id] ??= $this->get((string) $this->definitions->getAlias($id));
+            $instance = $this->get((string) $this->definitions->getAlias($id));
+            $this->assertMatchesClassId($instance, $id);
+            return $this->instances[$id] = $instance;
         }
 
         return $this->resolve($id);
@@ -214,7 +217,8 @@ class Container implements ContainerInterface
      * honors `class-string<T>`. Custom ids may produce any object, including a
      * short id that only matches a class name case-insensitively (`closure`).
      *
-     * Never autoloads: an id that is not loaded is not checked.
+     * Only reached for a mismatch, once per resolved service: autoloading the
+     * id here only visits a service the runtime actually uses.
      *
      * @throws DefinitionException
      */
@@ -223,8 +227,7 @@ class Container implements ContainerInterface
         if ($instance instanceof $id) {
             return;
         }
-        $loaded = interface_exists($id, false) || class_exists($id, false);
-        if ($loaded && ReflectionCache::canonicalName($id) === $id) {
+        if (ReflectionCache::canonicalName($id) === $id) {
             $type = $instance::class;
             throw new DefinitionException(
                 "The definition for `{$id}` produced `{$type}`, which does not implement `{$id}`.",

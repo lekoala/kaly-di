@@ -189,6 +189,66 @@ class IdentityAndTypingTest extends TestCase
         $di->get(TestObject::class);
     }
 
+    /**
+     * The id of the resolved service may be autoloaded: an interface that is
+     * not loaded yet is still enforced, also when assertions are disabled.
+     */
+    public function testAnInterfaceNotLoadedYetIsStillEnforced(): void
+    {
+        $interface = 'KalyLateLoaded\\LateLoadedInterface';
+        $loader = static function (string $name) use ($interface): void {
+            if ($name === $interface) {
+                require __DIR__ . '/fixtures/LateLoadedInterface.php';
+            }
+        };
+        spl_autoload_register($loader);
+
+        try {
+            $di = new Container(Definitions::create()->set($interface, fn() => new stdClass()));
+            $this->expectException(DefinitionException::class);
+            $di->get($interface);
+        } finally {
+            spl_autoload_unregister($loader);
+        }
+    }
+
+    public function testAnAliasMustHonorItsClassId(): void
+    {
+        $di = new Container(Definitions::create()->set('bad', new stdClass())->alias(TestInterface::class, 'bad'));
+
+        try {
+            $di->get(TestInterface::class);
+            $this->fail('Expected a DefinitionException');
+        } catch (DefinitionException $e) {
+            $this->assertStringContainsString('does not implement', $e->getMessage());
+        }
+        // Not cached: the next call fails the same way
+        $this->expectException(DefinitionException::class);
+        $di->get(TestInterface::class);
+    }
+
+    public function testACompatibleAliasRunsTargetCallbacksOnce(): void
+    {
+        $calls = 0;
+        $di = new Container(
+            Definitions::create()
+                ->set('app.object', TestObject::class)
+                ->callback('app.object', function () use (&$calls): void {
+                    $calls++;
+                })
+                ->alias(TestInterface::class, 'app.object'),
+        );
+
+        $this->assertSame($di->get('app.object'), $di->get(TestInterface::class));
+        $this->assertSame(1, $calls);
+    }
+
+    public function testStdClassIsRejectedAsAlias(): void
+    {
+        $this->expectException(DefinitionException::class);
+        Definitions::create()->set('bad', new stdClass())->alias('stdclass', 'bad');
+    }
+
     public function testASubclassSatisfiesAConcreteClassId(): void
     {
         $di = new Container(Definitions::create()->set(TestParent::class, TestChild::class));

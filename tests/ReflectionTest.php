@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use InvalidArgumentException;
+use Kaly\Di\Container;
+use Kaly\Di\Injector;
 use Kaly\Di\Reflection;
 use Kaly\Tests\Mocks\ReflTestMock;
 use Kaly\Tests\Mocks\TestInterface;
@@ -41,6 +44,22 @@ class ReflectionTest extends TestCase
         $this->assertNull(Reflection::tryClass(TestInterface::class));
         $this->assertNull(Reflection::tryClass(ReflectionTestTrait::class));
         $this->assertSame(ReflectionTestEnum::class, Reflection::tryClass(ReflectionTestEnum::class)?->getName());
+    }
+
+    /**
+     * The answer does not depend on what the container already reflected.
+     */
+    public function testTryClassIgnoresCachedInterfaces(): void
+    {
+        // Caches the interface reflection, then refuses to build it
+        try {
+            (new Injector(new Container()))->make(TestInterface::class);
+            $this->fail('An interface cannot be built');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('not instantiable', $e->getMessage());
+        }
+
+        $this->assertNull(Reflection::tryClass(TestInterface::class));
     }
 
     /**

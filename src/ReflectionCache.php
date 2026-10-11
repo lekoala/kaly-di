@@ -64,21 +64,23 @@ final class ReflectionCache
     }
 
     /**
-     * The reflection of an existing class, or null. A cache hit skips the
-     * existence check; a miss is never cached. Autoloader errors propagate.
+     * The reflection of an existing class, or null. Interfaces and traits are
+     * not classes: null too, even when reflection() already cached them. A
+     * cache hit skips the existence check; a miss is never cached. Autoloader
+     * errors propagate.
      *
      * @return ReflectionClass<object>|null
      */
     public static function tryReflection(string $class): ?ReflectionClass
     {
-        $cached = self::$reflection[self::key($class)] ?? null;
-        if ($cached !== null) {
-            return $cached[0];
+        $refl = self::$reflection[self::key($class)][0] ?? null;
+        if ($refl === null) {
+            if (!class_exists($class)) {
+                return null;
+            }
+            $refl = self::reflection($class)[0];
         }
-        if (!class_exists($class)) {
-            return null;
-        }
-        return self::reflection($class)[0];
+        return $refl->isInterface() || $refl->isTrait() ? null : $refl;
     }
 
     /**

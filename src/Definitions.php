@@ -330,6 +330,7 @@ final class Definitions
         $this->assertNotLocked();
         $alias = self::writableId($alias);
         $target = self::writableId($target);
+        DefinitionGuard::assertUsableId($alias);
         DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $alias);
 
         if (!array_key_exists($target, $this->values) && !array_key_exists($target, $this->aliases)) {

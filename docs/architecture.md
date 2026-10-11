@@ -220,14 +220,22 @@ resources rather than services, and must be defined. A parameter typed
 `?\DateTimeImmutable $now = null` therefore falls back to its default unless
 `DateTimeImmutable` is defined.
 
-Class ids follow PHP class-name rules: `get('\Foo')` and `get('foo')` resolve to
-the same definition and shared instance as `get(Foo::class)`. Custom string ids
-(`'app.cache'`) are matched exactly.
+Ids have one canonical form, applied both when registering (`set()`, `bind()`,
+`rebind()`, `alias()`, `parameter()`, `callback()`) and when resolving:
 
-An entry registered under an interface or an abstract class must produce an
-instance of it, whatever its form (factory, object or class name); otherwise
-`get()` throws a `DefinitionException`. A concrete class id may still be remapped
-to an unrelated class.
+- a leading backslash is always dropped: `'\Foo'` is `'Foo'`, `'\app.cache'` is
+  `'app.cache'`;
+- `get('foo')` resolves to the definition and shared instance of `Foo` (PHP class
+  names are case-insensitive);
+- definitions must name a class as declared. Writing a namespaced class id with a
+  different case (`'app\foo'`) fails an assertion in development: use `Foo::class`.
+  A short id such as `'closure'` stays a free custom id, matched exactly.
+
+An entry registered under a class or an interface (its exact declared name) must
+produce an instance of it, whatever its form (factory, object or class name):
+`get()` honors `class-string<T>`. Otherwise it throws a `DefinitionException`; class
+names and objects are already rejected at registration in development. To map an
+id to an unrelated class, use a custom id (`'app.logger'`).
 
 `NotFoundExceptionInterface` is only thrown for the requested id itself. When a
 factory, a parameter closure or a callback looks up a missing entry, the outer

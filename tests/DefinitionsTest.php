@@ -128,10 +128,10 @@ class DefinitionsTest extends TestCase
     public function testContainerInterfaceCanBeUsedAsDefinitionId(): void
     {
         $def = Definitions::create();
-        $def->set(ContainerInterface::class, TestObject::class);
+        $def->set(ContainerInterface::class, Container::class);
 
         $this->assertTrue($def->has(ContainerInterface::class));
-        $this->assertSame(TestObject::class, $def->get(ContainerInterface::class));
+        $this->assertSame(Container::class, $def->get(ContainerInterface::class));
     }
 
     public function testContainerInterfaceCanReceiveParametersAndCallbacks(): void

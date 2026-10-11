@@ -187,6 +187,7 @@ final class Definitions
      */
     public function sourceFor(string $id): array
     {
+        $id = DefinitionGuard::normalizeId($id);
         return $this->sources[$id] ?? [];
     }
 
@@ -230,6 +231,7 @@ final class Definitions
      */
     public function has(string $id): bool
     {
+        $id = DefinitionGuard::normalizeId($id);
         return array_key_exists($id, $this->values) || array_key_exists($id, $this->aliases);
     }
 
@@ -240,6 +242,7 @@ final class Definitions
      */
     public function get(string $id): string|object|null
     {
+        $id = DefinitionGuard::normalizeId($id);
         return $this->values[$id] ?? null;
     }
 
@@ -250,6 +253,7 @@ final class Definitions
      */
     public function expand(string $id, ContainerInterface $container): string|object|null
     {
+        $id = DefinitionGuard::normalizeId($id);
         $entry = $this->values[$id] ?? null;
         // If we have a closure, run it to get a string or an object
         if ($entry instanceof Closure) {
@@ -275,9 +279,14 @@ final class Definitions
     public function set(string $id, string|object $value, ?string $source = null): self
     {
         $this->assertNotLocked();
+        $id = self::writableId($id);
         DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $id);
         DefinitionGuard::assertUsableId($id);
         DefinitionGuard::assertValidDefinition($id, $value);
+        assert(
+            DefinitionGuard::isCompatibleReplacement($id, $value),
+            DefinitionGuard::replacementMismatch($id, $value),
+        );
         $this->values[$id] = $value;
         $this->sources[$id] = ['initial' => $source, 'last' => $source];
         return $this;
@@ -293,6 +302,7 @@ final class Definitions
     public function bind(string $abstract, string $concrete, ?string $source = null): self
     {
         $this->assertNotLocked();
+        $abstract = self::writableId($abstract);
         DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $abstract);
         DefinitionGuard::assertUsableId($abstract);
         assert(interface_exists($abstract) || class_exists($abstract), "Abstraction `{$abstract}` does not exist");
@@ -318,6 +328,8 @@ final class Definitions
     public function alias(string $alias, string $target): self
     {
         $this->assertNotLocked();
+        $alias = self::writableId($alias);
+        $target = self::writableId($target);
         DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $alias);
 
         if (!array_key_exists($target, $this->values) && !array_key_exists($target, $this->aliases)) {
@@ -344,6 +356,7 @@ final class Definitions
 
     public function hasAlias(string $id): bool
     {
+        $id = DefinitionGuard::normalizeId($id);
         return array_key_exists($id, $this->aliases);
     }
 
@@ -352,6 +365,7 @@ final class Definitions
      */
     public function getAlias(string $id): ?string
     {
+        $id = DefinitionGuard::normalizeId($id);
         return $this->aliases[$id] ?? null;
     }
 
@@ -364,8 +378,8 @@ final class Definitions
      * composition for a test, a demo, or a separate runtime.
      *
      * It accepts the same value shapes as set() (class-string, object, closure).
-     * When the id is typed (an interface or an abstract class), the value is
-     * checked statically whenever its actual type is knowable without running
+     * When the id names a class or an interface, the value is checked
+     * statically whenever its actual type is knowable without running
      * user code: class-strings and concrete objects must be compatible, while
      * closures stay free because their result is only known at execution time.
      *
@@ -400,6 +414,7 @@ final class Definitions
         ?string $source = null,
     ): self {
         $this->assertNotLocked();
+        $id = self::writableId($id);
         if (!array_key_exists($id, $this->values)) {
             throw new DefinitionException(
                 "Cannot rebind `{$id}`: no existing definition was found. Define it first with set() or bind().",
@@ -415,8 +430,8 @@ final class Definitions
         DefinitionGuard::assertUsableId($id);
         DefinitionGuard::assertValidDefinition($id, $value);
 
-        // Development-only: is a typed id bound to a compatible value? The whole
-        // check lives inside assert() so isTypedId() never autoloads in production.
+        // Development-only: is a class id bound to a compatible value? The whole
+        // check lives inside assert() so it never autoloads in production.
         assert(
             DefinitionGuard::isCompatibleReplacement($id, $value),
             DefinitionGuard::replacementMismatch($id, $value),
@@ -439,6 +454,7 @@ final class Definitions
     public function parameter(string $id, string $name, mixed $value): self
     {
         $this->assertNotLocked();
+        $id = self::writableId($id);
         DefinitionGuard::assertNotAlias($this->aliases, $id);
         $this->parameters[$id][$name] = $value;
         return $this;
@@ -464,6 +480,7 @@ final class Definitions
      */
     public function parametersFor(string $id): array
     {
+        $id = DefinitionGuard::normalizeId($id);
         return $this->parameters[$id] ?? [];
     }
 
@@ -475,6 +492,7 @@ final class Definitions
      */
     public function allParametersFor(string $class, string $id): array
     {
+        $id = DefinitionGuard::normalizeId($id);
         if ($class === $id) {
             return $this->parameters[$class] ?? [];
         }
@@ -489,6 +507,7 @@ final class Definitions
     public function callback(string $id, Closure $fn, ?string $name = null): self
     {
         $this->assertNotLocked();
+        $id = self::writableId($id);
         DefinitionGuard::assertNotAlias($this->aliases, $id);
         // Use a stable key so merging definitions never renumbers callbacks. The
         // prefix keeps it apart from explicit names such as "5".
@@ -504,6 +523,7 @@ final class Definitions
      */
     public function callbacksFor(string $id): array
     {
+        $id = DefinitionGuard::normalizeId($id);
         return $this->callbacks[$id] ?? [];
     }
 
@@ -548,6 +568,20 @@ final class Definitions
     public function isLocked(): bool
     {
         return $this->locked;
+    }
+
+    /**
+     * Normalize an id before storing anything under it. A class id must be
+     * written as declared: checked in development only, since it may autoload.
+     */
+    private static function writableId(string $id): string
+    {
+        $id = DefinitionGuard::normalizeId($id);
+        assert(
+            DefinitionGuard::isCanonicalId($id),
+            "Id `{$id}` names a class with a different case: use its declared name (`Foo::class`).",
+        );
+        return $id;
     }
 
     private function assertNotLocked(): void

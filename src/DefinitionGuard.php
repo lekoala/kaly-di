@@ -68,9 +68,34 @@ final class DefinitionGuard
 
     public static function assertUsableId(string $id): void
     {
-        if ($id === \stdClass::class) {
+        if (strcasecmp(self::normalizeId($id), \stdClass::class) === 0) {
             throw new DefinitionException('Cannot set stdClass as id');
         }
+    }
+
+    /**
+     * Drop a leading backslash, as PHP does for a class name reference. Every
+     * id is stored and looked up in this form. Never autoloads.
+     */
+    public static function normalizeId(string $id): string
+    {
+        return ltrim($id, '\\');
+    }
+
+    /**
+     * Development assertion helper: a namespaced id naming a class or an
+     * interface must be written as declared (use `Foo::class`), otherwise it
+     * would not match the class hierarchy at resolution. A short id such as
+     * `closure` stays a free custom id. Only called from assert(): it may
+     * autoload.
+     */
+    public static function isCanonicalId(string $id): bool
+    {
+        if (!str_contains($id, '\\')) {
+            return true;
+        }
+        $class = ReflectionCache::canonicalName($id);
+        return $class === null || $class === $id;
     }
 
     /**
@@ -87,15 +112,15 @@ final class DefinitionGuard
     }
 
     /**
-     * Development assertion helper: is a rebind() value compatible with a typed
-     * id? Closures are free (their result is only known at execution time) and
-     * untyped ids accept anything. Only called from assert().
+     * Development assertion helper: is a value compatible with a class id (a
+     * class or an interface)? Closures are free (their result is only known at
+     * execution time) and custom ids accept anything. Only called from assert().
      *
      * @param class-string|object $value
      */
     public static function isCompatibleReplacement(string $id, string|object $value): bool
     {
-        if ($value instanceof Closure || !self::isTypedId($id)) {
+        if ($value instanceof Closure || !self::isClassId($id)) {
             return true;
         }
         return is_string($value) ? is_a($value, $id, true) : $value instanceof $id;
@@ -138,12 +163,13 @@ final class DefinitionGuard
     }
 
     /**
-     * Whether an id denotes an interface or an abstract class.
+     * Whether an id is the declared name of a class or an interface. A short
+     * custom id such as `closure` is not the `Closure` class id.
      *
      * May autoload, so it is only ever reached from within assert().
      */
-    private static function isTypedId(string $id): bool
+    private static function isClassId(string $id): bool
     {
-        return interface_exists($id) || class_exists($id) && (new \ReflectionClass($id))->isAbstract();
+        return ReflectionCache::canonicalName($id) === $id;
     }
 }

@@ -18,22 +18,23 @@ use PHPUnit\Framework\TestCase;
 class ConfigureCallbackTest extends TestCase
 {
     /**
-     * Callbacks registered on an id remapped to an unrelated class still run,
-     * exactly once, on the produced instance.
+     * Callbacks registered on a custom id mapped to a class still run, exactly
+     * once, on the produced instance. (A class id cannot be remapped to an
+     * unrelated class: it must produce an instance of itself.)
      */
-    public function testCallbacksOnRemappedClassId(): void
+    public function testCallbacksOnCustomIdMappedToAClass(): void
     {
         $calls = 0;
         $definitions = Definitions::create()
-            ->set(TestObject::class, TestObject2::class)
+            ->set('app.object', TestObject2::class)
             ->parameter(TestObject2::class, 'v', 'initial')
-            ->callback(TestObject::class, function (TestObject2 $obj) use (&$calls): void {
+            ->callback('app.object', function (TestObject2 $obj) use (&$calls): void {
                 $calls++;
                 $obj->v .= '+cb';
             });
 
         $di = new Container($definitions);
-        $inst = $di->get(TestObject::class);
+        $inst = $di->get('app.object');
 
         $this->assertInstanceOf(TestObject2::class, $inst);
         /** @var TestObject2 $inst */
@@ -41,7 +42,7 @@ class ConfigureCallbackTest extends TestCase
         $this->assertSame('initial+cb', $inst->v);
 
         // Cached: the callback does not run again
-        $this->assertSame($inst, $di->get(TestObject::class));
+        $this->assertSame($inst, $di->get('app.object'));
         $this->assertSame(1, $calls);
 
         TestObject2::$counter = 0;

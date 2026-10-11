@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use AssertionError;
 use DateTimeImmutable;
 use Kaly\Di\Container;
 use Kaly\Di\ContainerException;
@@ -15,11 +16,13 @@ use Kaly\Di\Reflection;
 use Kaly\Tests\Mocks\TestChild;
 use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestObject;
+use Kaly\Tests\Mocks\TestObject2;
 use Kaly\Tests\Mocks\TestOptionalClock;
 use Kaly\Tests\Mocks\TestParent;
 use Kaly\Tests\Mocks\TestSelfTyped;
 use Kaly\Tests\Mocks\TestSubContainer;
 use PDO;
+use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\NotFoundExceptionInterface;
 use ReflectionMethod;
@@ -77,12 +80,68 @@ class IdentityAndTypingTest extends TestCase
         $this->assertSame(1, $calls);
     }
 
-    public function testCustomIdsAreNotNormalized(): void
+    public function testCustomIdsOnlyIgnoreALeadingBackslash(): void
     {
         $di = new Container(Definitions::create()->set('app.object', TestObject::class));
 
         $this->assertFalse($di->has('App.Object'));
-        $this->assertFalse($di->has('\\app.object'));
+        $this->assertTrue($di->has('\\app.object'));
+        $this->assertSame($di->get('app.object'), $di->get('\\app.object'));
+    }
+
+    /**
+     * Normalization also applies when registering: a definition, its
+     * parameters and its callbacks written with a leading backslash belong to
+     * the declared class.
+     */
+    public function testRegistrationNormalizesALeadingBackslash(): void
+    {
+        $calls = 0;
+        $object = new TestObject();
+        $definitions = Definitions::create()->set('\\' . TestObject::class, $object)->callback('\\'
+        . TestObject::class, function () use (&$calls): void {
+            $calls++;
+        });
+        $di = new Container($definitions);
+
+        $this->assertTrue($definitions->has(TestObject::class));
+        $this->assertSame($object, $di->get(TestObject::class));
+        $this->assertSame($object, $di->get('\\' . TestObject::class));
+        $this->assertSame(1, $calls);
+    }
+
+    public function testRegistrationNormalizesParameters(): void
+    {
+        $di = new Container(Definitions::create()->parameter('\\' . TestObject2::class, 'v', 'configured'));
+
+        $this->assertSame('configured', $di->get(TestObject2::class)->v);
+    }
+
+    #[RequiresSetting('zend.assertions', '1')]
+    public function testANamespacedClassIdMustUseTheDeclaredCase(): void
+    {
+        $this->expectException(AssertionError::class);
+        $this->expectExceptionMessage('different case');
+        Definitions::create()->set(strtolower(TestObject::class), new TestObject());
+    }
+
+    public function testAShortCustomIdMayMatchAClassName(): void
+    {
+        $di = new Container(Definitions::create()->set('closure', TestObject::class));
+
+        $this->assertInstanceOf(TestObject::class, $di->get('closure'));
+    }
+
+    public function testStdClassIsRejectedInAnySpelling(): void
+    {
+        foreach (['\\stdClass', 'stdclass', 'STDCLASS'] as $id) {
+            try {
+                Definitions::create()->set($id, new TestObject());
+                $this->fail("`{$id}` should be rejected");
+            } catch (DefinitionException $e) {
+                $this->assertStringContainsString('stdClass', $e->getMessage());
+            }
+        }
     }
 
     public function testInternalClassesAreNotAutowired(): void
@@ -117,12 +176,42 @@ class IdentityAndTypingTest extends TestCase
         $di->get(TestInterface::class);
     }
 
-    public function testInterfaceDefinitionObjectMustBeAnImplementation(): void
+    /**
+     * get() honors class-string<T> for concrete classes too: remapping a class
+     * id to an unrelated class is a configuration error, use a custom id.
+     */
+    public function testConcreteClassDefinitionMustProduceAnInstanceOfIt(): void
     {
-        $di = new Container(Definitions::create()->set(TestInterface::class, new stdClass()));
+        $di = new Container(Definitions::create()->set(TestObject::class, fn() => new stdClass()));
 
         $this->expectException(DefinitionException::class);
-        $di->get(TestInterface::class);
+        $this->expectExceptionMessage('does not implement');
+        $di->get(TestObject::class);
+    }
+
+    public function testASubclassSatisfiesAConcreteClassId(): void
+    {
+        $di = new Container(Definitions::create()->set(TestParent::class, TestChild::class));
+
+        $this->assertInstanceOf(TestChild::class, $di->get(TestParent::class));
+    }
+
+    /**
+     * Incompatible class names and objects are already reported at
+     * registration in development.
+     */
+    #[RequiresSetting('zend.assertions', '1')]
+    public function testAnIncompatibleValueIsRejectedAtRegistration(): void
+    {
+        $this->expectException(AssertionError::class);
+        Definitions::create()->set(TestInterface::class, new stdClass());
+    }
+
+    #[RequiresSetting('zend.assertions', '1')]
+    public function testAnUnrelatedClassIsRejectedAtRegistration(): void
+    {
+        $this->expectException(AssertionError::class);
+        Definitions::create()->set(TestObject::class, TestObject2::class);
     }
 
     public function testSelfAndParentTypesAreResolved(): void

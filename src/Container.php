@@ -82,21 +82,32 @@ class Container implements ContainerInterface
             throw new ReferenceNotFoundException("`{$id}` is not set");
         }
 
+        // One shared entry per id: `\Foo` and `foo` resolve as `Foo`.
+        $canonical = $this->canonicalId($id);
+        if ($canonical !== $id) {
+            return $this->instances[$id] = $this->get($canonical);
+        }
+
         // An alias delegates to its target: same instance, configured once.
         if ($this->definitions->hasAlias($id)) {
             return $this->instances[$id] ??= $this->get((string) $this->definitions->getAlias($id));
         }
 
-        // A class id without its own definition resolves under the declared
-        // class name: `\Foo` or `foo` share the definition and instance of `Foo`.
-        if (!$this->definitions->has($id)) {
-            $class = ReflectionCache::canonicalName($id);
-            if ($class !== null && $class !== $id) {
-                return $this->instances[$id] = $this->get($class);
-            }
-        }
-
         return $this->resolve($id);
+    }
+
+    /**
+     * The id under which an entry is stored: without a leading backslash, and
+     * for a class without its own definition, the declared class name.
+     * Definitions store class ids as declared, so a defined id is canonical.
+     */
+    private function canonicalId(string $id): string
+    {
+        $id = DefinitionGuard::normalizeId($id);
+        if ($this->definitions->has($id)) {
+            return $id;
+        }
+        return ReflectionCache::canonicalName($id) ?? $id;
     }
 
     /**
@@ -124,7 +135,7 @@ class Container implements ContainerInterface
         try {
             // A cached instance does not exist yet: build, configure and cache it
             $instance = $this->build($id);
-            $this->assertMatchesTypedId($instance, $id);
+            $this->assertMatchesClassId($instance, $id);
             // Callbacks run only once since instances are cached
             $this->configure($instance, $id);
             // Nothing is cached before configure(): a failed resolution leaves
@@ -176,10 +187,7 @@ class Container implements ContainerInterface
         if ($class === null) {
             return false;
         }
-        if ($class !== $id && $this->definitions->has($class)) {
-            return true;
-        }
-        return self::isAutowirable($class);
+        return $this->definitions->has($class) || self::isAutowirable($class);
     }
 
     /**
@@ -201,23 +209,22 @@ class Container implements ContainerInterface
     }
 
     /**
-     * A definition registered under an interface or an abstract class must
-     * produce an instance of it, whatever its form (factory, object or class
-     * name). A concrete class id may be remapped to an unrelated class.
+     * An entry registered under a class or an interface must produce an
+     * instance of it, whatever its form (factory, object or class name): get()
+     * honors `class-string<T>`. Custom ids may produce any object, including a
+     * short id that only matches a class name case-insensitively (`closure`).
      *
      * Never autoloads: an id that is not loaded is not checked.
      *
      * @throws DefinitionException
      */
-    private function assertMatchesTypedId(object $instance, string $id): void
+    private function assertMatchesClassId(object $instance, string $id): void
     {
         if ($instance instanceof $id) {
             return;
         }
-        $typed =
-            interface_exists($id, false)
-            || class_exists($id, false) && ReflectionCache::reflection($id)[0]->isAbstract();
-        if ($typed) {
+        $loaded = interface_exists($id, false) || class_exists($id, false);
+        if ($loaded && ReflectionCache::canonicalName($id) === $id) {
             $type = $instance::class;
             throw new DefinitionException(
                 "The definition for `{$id}` produced `{$type}`, which does not implement `{$id}`.",
@@ -395,12 +402,10 @@ class Container implements ContainerInterface
      * Call additional methods after instantiation.
      *
      * Callbacks are matched on the class hierarchy. Id-specific callbacks are
-     * appended whenever the id is not already covered by that hierarchy: a
-     * custom id, but also a class id remapped to an unrelated class
-     * (set(A::class, B::class) where B does not extend A). When the id IS part
-     * of the hierarchy (the instance's own class, a parent, an interface),
-     * callbacksForClass() already collected them and appending again would run
-     * them twice.
+     * appended whenever the id is not already covered by that hierarchy, that
+     * is for a custom id. A class id is always part of the hierarchy (see
+     * assertMatchesClassId()): callbacksForClass() already collected its
+     * callbacks and appending again would run them twice.
      *
      * @param object $instance The instance to configure
      * @param string $id Id in the container

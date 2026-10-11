@@ -238,8 +238,7 @@ $definitions->rebind(MailerInterface::class, FakeMailer::class);
 ```
 
 `rebind()` accepts the same values as `set()` (class name, object, closure). When
-the id is an interface or an abstract class, the value is checked for
-compatibility whenever it is knowable without running user code: a class name or
+the id names a class or an interface, the value is checked for compatibility whenever it is knowable without running user code: a class name or
 a concrete object must be compatible, while a closure stays free because its
 result is only known at execution time.
 

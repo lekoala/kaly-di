@@ -11,14 +11,21 @@ All notable changes to this project are documented in this file.
   parameter such as `?\DateTimeImmutable $now = null` now falls back to its
   default instead of failing on `DateTimeZone::$timezone`.
 - Subclasses of `Container` are no longer autowirable either.
-- Class ids are canonical: `get('\Foo')` and `get('foo')` return the definition
-  and shared instance of `Foo` instead of building duplicates. Custom string ids
-  are still matched exactly.
+- Ids are canonical, at registration and at resolution: a leading backslash is
+  dropped (`'\Foo'` is `'Foo'`), and `get('foo')` returns the definition and
+  shared instance of `Foo` instead of building a duplicate. Definitions,
+  parameters and callbacks registered as `'\Foo'` now belong to `Foo`. A
+  namespaced class id written with a different case fails an assertion in
+  development. Short custom ids (`'closure'`) are still matched exactly.
+- `stdClass` is rejected as an id in any spelling (`'\stdClass'`, `'stdclass'`).
 - A missing entry looked up by a factory, a parameter closure or a callback now
   surfaces as a `ContainerException` (previous: the `ReferenceNotFoundException`).
   `NotFoundExceptionInterface` is reserved for the requested id (PSR-11).
-- An entry registered under an interface or an abstract class must produce an
-  instance of it: `get()` throws a `DefinitionException` otherwise.
+- An entry registered under a class or an interface must produce an instance of
+  it: `get()` throws a `DefinitionException` otherwise, and `set()`/`rebind()`
+  assert it in development. Remapping a class id to an unrelated class is no
+  longer allowed: use a custom id.
+- `composer/ca-bundle` is no longer a dev dependency.
 
 ### Fixed
 

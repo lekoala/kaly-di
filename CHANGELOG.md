@@ -4,6 +4,8 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0]
+
 ### Added
 
 - `Reflection::tryClass($name)`: the cached `ReflectionClass` of an existing class,

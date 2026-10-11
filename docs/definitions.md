@@ -133,6 +133,15 @@ $definitions->parameter(
 The closure is resolved lazily when the object is instantiated, so it always sees the
 current state of the container.
 
+Because a configured `Closure` is always executed, a constructor that expects a
+closure itself (`__construct(\Closure $handler)`) must receive it wrapped in another
+closure:
+
+```php
+$handler = fn (Request $r): Response => new Response();
+$definitions->parameter(Router::class, 'handler', fn () => $handler);
+```
+
 ### Resolution Errors
 
 When a required parameter cannot be resolved, the message names the **immediate**

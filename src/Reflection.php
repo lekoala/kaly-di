@@ -26,7 +26,8 @@ final class Reflection
      * a ReflectionClass.
      *
      * On a union, the first non-builtin named type wins. An intersection has
-     * no single class, so null is returned.
+     * no single class, so null is returned. `self` and `parent` are resolved
+     * against the declaring class.
      *
      * @return class-string|null
      */
@@ -34,9 +35,7 @@ final class Reflection
     {
         foreach (Parameters::getParameterTypes($param) as $type) {
             if ($type instanceof ReflectionNamedType && !$type->isBuiltin()) {
-                /** @var class-string $name */
-                $name = $type->getName();
-                return $name;
+                return TypeMatcher::className($type, $param->getDeclaringClass());
             }
         }
         return null;

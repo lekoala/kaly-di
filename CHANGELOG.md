@@ -4,6 +4,33 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Changed (composition contract)
+
+- Internal PHP classes (`PDO`, `DateTimeImmutable`, `ArrayObject`, `stdClass`...)
+  are no longer autowired: `has()` is false unless they are defined. An optional
+  parameter such as `?\DateTimeImmutable $now = null` now falls back to its
+  default instead of failing on `DateTimeZone::$timezone`.
+- Subclasses of `Container` are no longer autowirable either.
+- Class ids are canonical: `get('\Foo')` and `get('foo')` return the definition
+  and shared instance of `Foo` instead of building duplicates. Custom string ids
+  are still matched exactly.
+- A missing entry looked up by a factory, a parameter closure or a callback now
+  surfaces as a `ContainerException` (previous: the `ReferenceNotFoundException`).
+  `NotFoundExceptionInterface` is reserved for the requested id (PSR-11).
+- An entry registered under an interface or an abstract class must produce an
+  instance of it: `get()` throws a `DefinitionException` otherwise.
+
+### Fixed
+
+- `self` and `parent` parameter types are resolved against the declaring class
+  (`Reflection::getParameterTypeName()`/`getParameterClass()`, type checks and
+  autowiring).
+- An anonymous callback key can no longer collide with an explicit numeric name.
+- `bind()` rejects `stdClass` as id, like `set()` and `rebind()`.
+- `Injector::invoke()` no longer fills its reflection cache with entries that can
+  never be hit for non-closure callables.
+- Faster `get()` for already resolved entries.
+
 ## [0.3.2]
 
 ### Added

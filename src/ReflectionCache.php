@@ -32,6 +32,32 @@ final class ReflectionCache
     private static array $hierarchy = [];
 
     /**
+     * @var array<string, class-string>
+     */
+    private static array $names = [];
+
+    /**
+     * The declared name of a class or interface, as PHP resolves it
+     * (case-insensitive, leading backslash ignored), or null when it does not
+     * exist. Only positive lookups are cached: a loaded class cannot vanish.
+     *
+     * @return class-string|null
+     */
+    public static function canonicalName(string $name): ?string
+    {
+        if (array_key_exists($name, self::$names)) {
+            return self::$names[$name];
+        }
+        $trimmed = ltrim($name, '\\');
+        if (!class_exists($trimmed) && !interface_exists($trimmed)) {
+            return null;
+        }
+        /** @var class-string $canonical */
+        $canonical = (new ReflectionClass($trimmed))->getName();
+        return self::$names[$name] = $canonical;
+    }
+
+    /**
      * @template T of object
      * @param class-string<T> $class
      * @return array{ReflectionClass<T>, ReflectionParameter[]}
@@ -63,9 +89,11 @@ final class ReflectionCache
             return ['interfaces' => [], 'parents' => []];
         }
         if (!array_key_exists($class, self::$hierarchy)) {
+            /** @var array<class-string, class-string>|false $interfacesRaw */
             $interfacesRaw = class_implements($class);
             $interfaces = is_array($interfacesRaw) ? $interfacesRaw : [];
             ksort($interfaces); // deterministic order
+            /** @var array<class-string, class-string>|false $parentsRaw */
             $parentsRaw = class_parents($class);
             $parents = is_array($parentsRaw) ? $parentsRaw : [];
             self::$hierarchy[$class] = ['interfaces' => array_values($interfaces), 'parents' => array_values($parents)];
@@ -96,5 +124,6 @@ final class ReflectionCache
     {
         self::$reflection = [];
         self::$hierarchy = [];
+        self::$names = [];
     }
 }

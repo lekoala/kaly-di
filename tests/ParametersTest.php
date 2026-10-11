@@ -13,6 +13,7 @@ use Kaly\Di\UnresolvableParameterException;
 use Kaly\Tests\Mocks\ReflTestMock;
 use Kaly\Tests\Mocks\ReflTestMockObject;
 use PDO;
+use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
@@ -196,6 +197,7 @@ class ParametersTest extends TestCase
         $this->assertSame(['test', 123, true, [], 0, false, null, null], $resolved);
     }
 
+    #[RequiresSetting('zend.assertions', '1')]
     public function testResolveParametersTooManyPositionalArgumentsThrows(): void
     {
         $reflection = new ReflectionClass(ReflTestMock::class);

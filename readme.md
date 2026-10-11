@@ -21,7 +21,7 @@ container itself.
 - **Strongly Typed Definitions:** define dependencies in PHP for full IDE support.
 - **Fail-fast composition:** duplicate service definitions are rejected; intentional overrides use `rebind()`.
 - **Predictable errors:** configuration invariants throw `DefinitionException`; development-only checks use `assert()`.
-- **Autowiring:** concrete classes are resolved automatically; bind interfaces when needed.
+- **Autowiring:** concrete user classes are resolved automatically; bind interfaces when needed. Internal PHP classes (`PDO`, `DateTimeImmutable`...) are never autowired: define them.
 - **Predictable `has()`:** true for explicit definitions/bindings or instantiable concrete classes; constructor resolution may still fail in `get()`.
 - **Explicit Lifecycle:** `Container::get()` returns shared services, `Injector::make()` instantiates fresh concrete classes.
 - **Developer Friendly:** typed error reporting and development-only assertions.
@@ -82,6 +82,11 @@ $writer = $container->get(LogWriter::class);
 Read the environment at boot, convert it to plain PHP values, then forget it
 came from the environment. See
 [**Configuration**](./docs/configuration.md) for the full migration guide.
+
+> [!WARNING]
+> Autowiring lets `get()` and `make()` instantiate any loadable concrete class.
+> Never pass an id coming from user input (a route segment, a query parameter...)
+> to `get()`/`make()`: map it to an allowed list of classes first.
 
 ## Documentation
 

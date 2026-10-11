@@ -58,13 +58,17 @@ jobs:
         run: composer phpstan
 
   test:
-    name: PHPUnit PHP ${{ matrix.php }}
+    name: PHPUnit PHP ${{ matrix.php }} (${{ matrix.dependencies }})
     needs: lint
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         php: ["8.3", "8.4", "8.5"]
+        dependencies: [highest]
+        include:
+          - php: "8.3"
+            dependencies: lowest
 
     steps:
       - name: Checkout
@@ -89,11 +93,21 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ${{ steps.composer-cache.outputs.dir }}
-          key: ${{ runner.os }}-composer-${{ matrix.php }}-${{ hashFiles('composer.json') }}
-          restore-keys: ${{ runner.os }}-composer-${{ matrix.php }}-
+          key: ${{ runner.os }}-composer-${{ matrix.php }}-${{ matrix.dependencies }}-${{ hashFiles('composer.json') }}
+          restore-keys: ${{ runner.os }}-composer-${{ matrix.php }}-${{ matrix.dependencies }}-
 
       - name: Composer install
+        if: matrix.dependencies == 'highest'
         run: composer install --no-interaction --no-progress --prefer-dist --optimize-autoloader
+
+      - name: Composer update (lowest)
+        if: matrix.dependencies == 'lowest'
+        run: composer update --prefer-lowest --prefer-stable --no-interaction --no-progress --prefer-dist --optimize-autoloader
 
       - name: PHPUnit
         run: composer phpunit
+
+      # Production mode: assertions are compiled out and must not be relied upon
+      - name: PHPUnit (zend.assertions=-1)
+        if: success() || failure()
+        run: composer phpunit:prod

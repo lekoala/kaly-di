@@ -37,13 +37,19 @@ final class Injector
      * You can pass named arguments or positional arguments with ...$arguments
      *
      * @param callable $callable
-     * @param array<mixed> ...$arguments
+     * @param mixed ...$arguments
      * @return mixed
      */
     public function invoke(callable $callable, ...$arguments)
     {
-        $closure = $callable instanceof Closure ? $callable : Closure::fromCallable($callable);
-        [$reflection, $parameters] = $this->reflect($closure);
+        if ($callable instanceof Closure) {
+            [$reflection, $parameters] = $this->reflect($callable);
+        } else {
+            // Closure::fromCallable() returns a new closure on every call: it
+            // could never be found again in the cache.
+            $reflection = new ReflectionFunction(Closure::fromCallable($callable));
+            $parameters = $reflection->getParameters();
+        }
         $flatArguments = Parameters::resolveParameters($parameters, $arguments, $this->container);
         return $reflection->invoke(...$flatArguments);
     }
@@ -69,7 +75,7 @@ final class Injector
      *
      * @template T of object
      * @param class-string<T> $class
-     * @param array<mixed> ...$arguments
+     * @param mixed ...$arguments
      * @return T
      */
     public function make(string $class, ...$arguments)

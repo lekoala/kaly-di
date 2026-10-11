@@ -164,7 +164,7 @@ final class Parameters
                 if ($paramType instanceof ReflectionNamedType) {
                     foreach ($variadicValues as $value) {
                         assert(
-                            TypeMatcher::matches($value, $paramType),
+                            TypeMatcher::matches($value, $paramType, $parameter->getDeclaringClass()),
                             "parameter `{$paramName}` doesn't support " . get_debug_type($value),
                         );
                     }
@@ -188,7 +188,7 @@ final class Parameters
             }
 
             assert(
-                TypeMatcher::matches($value, $paramType),
+                TypeMatcher::matches($value, $paramType, $parameter->getDeclaringClass()),
                 "parameter `{$paramName}` doesn't support " . get_debug_type($value),
             );
             $provided[$paramName] = $value;
@@ -348,7 +348,7 @@ final class Parameters
             if (!$type instanceof ReflectionNamedType || $type->isBuiltin()) {
                 continue;
             }
-            $name = $type->getName();
+            $name = TypeMatcher::className($type, $parameter->getDeclaringClass());
             if ($container->has($name)) {
                 $candidates[$name] = false;
             } elseif ($name === ContainerInterface::class) {

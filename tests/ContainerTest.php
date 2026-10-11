@@ -22,6 +22,7 @@ use Kaly\Tests\Mocks\TestObject2;
 use Kaly\Tests\Mocks\TestObject4;
 use Kaly\Tests\Mocks\TestObject6;
 use Kaly\Tests\Mocks\TestObjectA;
+use Kaly\Tests\Mocks\TestObjectSinglePdoVal;
 use Kaly\Tests\Mocks\TestObjectSub;
 use Kaly\Tests\Mocks\TestObjectTwoPdosVal;
 use Kaly\Tests\Mocks\TestUnionClass;
@@ -128,14 +129,13 @@ class ContainerTest extends TestCase
     }
 
     /**
-     * stdClass are a bit special, they are not built in and the container
-     * should return a simple stdClass each time
+     * Internal PHP classes are values or resources, not services: they are
+     * never auto-wired, and stdClass cannot even be used as an id.
      */
-    public function testItCanCreateStdClass(): void
+    public function testItDoesNotAutowireStdClass(): void
     {
         $di = new Container();
-        $inst = $di->get(stdClass::class);
-        $this->assertInstanceOf(stdClass::class, $inst);
+        $this->assertFalse($di->has(stdClass::class));
 
         // You cannot use stdClass as id
         $this->expectException(DefinitionException::class);
@@ -288,7 +288,7 @@ class ContainerTest extends TestCase
     {
         $this->expectException(UnresolvableParameterException::class);
         $di = new Container();
-        $di->get(PDO::class);
+        $di->get(TestObjectSinglePdoVal::class);
     }
 
     public function testUnknownConfiguredParameterIsRejected(): void

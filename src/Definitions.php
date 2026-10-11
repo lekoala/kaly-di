@@ -294,6 +294,7 @@ final class Definitions
     {
         $this->assertNotLocked();
         DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $abstract);
+        DefinitionGuard::assertUsableId($abstract);
         assert(interface_exists($abstract) || class_exists($abstract), "Abstraction `{$abstract}` does not exist");
         assert(class_exists($concrete), "Class `{$concrete}` does not exist");
         assert(is_a($concrete, $abstract, true), "Class `{$concrete}` does not implement `{$abstract}`");
@@ -489,8 +490,9 @@ final class Definitions
     {
         $this->assertNotLocked();
         DefinitionGuard::assertNotAlias($this->aliases, $id);
-        // Use a stable, collision-free key so merging definitions never renumbers callbacks
-        $name ??= (string) spl_object_id($fn);
+        // Use a stable key so merging definitions never renumbers callbacks. The
+        // prefix keeps it apart from explicit names such as "5".
+        $name ??= '#' . spl_object_id($fn);
         $this->callbacks[$id][$name] = $fn;
         return $this;
     }

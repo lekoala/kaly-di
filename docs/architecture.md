@@ -211,9 +211,28 @@ $definitions->set(Foo::class, fn () => new Foo());
 `Container::has($id)` returns true for:
 
 - an explicit definition or binding,
-- a concrete, instantiable class (auto-wiring).
+- a concrete, instantiable, user-defined class (auto-wiring).
 
 Interfaces and abstract classes therefore return `false` unless they are bound.
+Internal PHP classes (`PDO`, `DateTimeImmutable`, `ArrayObject`...) and the
+container itself (including subclasses) are never auto-wired: they are values or
+resources rather than services, and must be defined. A parameter typed
+`?\DateTimeImmutable $now = null` therefore falls back to its default unless
+`DateTimeImmutable` is defined.
+
+Class ids follow PHP class-name rules: `get('\Foo')` and `get('foo')` resolve to
+the same definition and shared instance as `get(Foo::class)`. Custom string ids
+(`'app.cache'`) are matched exactly.
+
+An entry registered under an interface or an abstract class must produce an
+instance of it, whatever its form (factory, object or class name); otherwise
+`get()` throws a `DefinitionException`. A concrete class id may still be remapped
+to an unrelated class.
+
+`NotFoundExceptionInterface` is only thrown for the requested id itself. When a
+factory, a parameter closure or a callback looks up a missing entry, the outer
+`get()` throws a `ContainerException` with the original exception as previous, so
+a PSR-11 consumer never mistakes it for a missing entry.
 For concrete classes, `has()` reports whether the class itself is instantiable;
 constructor resolution may still fail when `get()` is called.
 

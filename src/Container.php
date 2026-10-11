@@ -27,17 +27,6 @@ class Container implements ContainerInterface
     protected readonly Definitions $definitions;
 
     /**
-     * Ids that must never be auto-wired by the container, otherwise it would
-     * silently build a second container or an empty Definitions.
-     *
-     * @var list<class-string>
-     */
-    private const NOT_AUTO_WIRED = [
-        self::class,
-        Definitions::class,
-    ];
-
-    /**
      * @var array<string,true>
      */
     protected array $building = [];
@@ -73,6 +62,12 @@ class Container implements ContainerInterface
      */
     public function get(string $id): object
     {
+        // Fast path: definitions are locked, so a cached instance implies has($id)
+        $cached = $this->instances[$id] ?? null;
+        if ($cached !== null) {
+            return $cached;
+        }
+
         // If has($id) returns false, get($id) MUST throw a NotFoundExceptionInterface.
         // has() is read-only but may autoload or reflect the id: any failure there is
         // normalized so get() only ever throws PSR-11 exceptions. A direct has()
@@ -92,10 +87,26 @@ class Container implements ContainerInterface
             return $this->instances[$id] ??= $this->get((string) $this->definitions->getAlias($id));
         }
 
-        if (array_key_exists($id, $this->instances)) {
-            return $this->instances[$id];
+        // A class id without its own definition resolves under the declared
+        // class name: `\Foo` or `foo` share the definition and instance of `Foo`.
+        if (!$this->definitions->has($id)) {
+            $class = ReflectionCache::canonicalName($id);
+            if ($class !== null && $class !== $id) {
+                return $this->instances[$id] = $this->get($class);
+            }
         }
 
+        return $this->resolve($id);
+    }
+
+    /**
+     * Build, configure and cache an entry that is known to exist and is not
+     * cached yet.
+     *
+     * @throws \Psr\Container\ContainerExceptionInterface
+     */
+    private function resolve(string $id): object
+    {
         // Guard the whole resolution: factory closures, constructor and callbacks.
         // Rejected before the marker is set: a recursive call refused here must
         // not touch the marker owned by the outer call.
@@ -113,6 +124,7 @@ class Container implements ContainerInterface
         try {
             // A cached instance does not exist yet: build, configure and cache it
             $instance = $this->build($id);
+            $this->assertMatchesTypedId($instance, $id);
             // Callbacks run only once since instances are cached
             $this->configure($instance, $id);
             // Nothing is cached before configure(): a failed resolution leaves
@@ -121,11 +133,14 @@ class Container implements ContainerInterface
             $this->instances[$id] = $instance;
 
             return $instance;
-        } catch (
-            DefinitionException|ReferenceNotFoundException|CircularReferenceException|UnresolvableParameterException|ContainerException $e
-        ) {
+        } catch (DefinitionException|CircularReferenceException|UnresolvableParameterException|ContainerException $e) {
             // Preserve our own exceptions, wrap any other (including third-party PSR ones)
             throw $e;
+        } catch (ReferenceNotFoundException $e) {
+            // has($id) already passed: this entry exists, a nested get() from a
+            // factory, parameter closure or callback did not. PSR-11 reserves
+            // NotFoundExceptionInterface for the requested id itself.
+            throw new ContainerException("Unable to create object `{$id}`: {$e->getMessage()}", 0, $e);
         } catch (\Throwable $e) {
             $type = $e::class;
             throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
@@ -139,11 +154,17 @@ class Container implements ContainerInterface
      *
      * `true` means:
      * - an explicit definition or binding,
-     * - a concrete, instantiable class (auto-wiring).
+     * - a concrete, instantiable, user-defined class (auto-wiring).
      *
-     * Interfaces and abstract classes therefore return false unless bound. For a
-     * concrete class, `has()` only reports that the class itself is instantiable:
-     * resolving its constructor arguments may still fail in `get()`.
+     * Class ids are matched like PHP class names: case-insensitive, with or
+     * without a leading backslash.
+     *
+     * Interfaces and abstract classes therefore return false unless bound.
+     * Internal PHP classes (PDO, DateTimeImmutable, ArrayObject...) and the
+     * container itself are never auto-wired: they must be defined. For a
+     * concrete class, `has()` only reports that the class itself is
+     * instantiable: resolving its constructor arguments may still fail in
+     * `get()`.
      */
     public function has(string $id): bool
     {
@@ -151,12 +172,57 @@ class Container implements ContainerInterface
         if ($this->definitions->has($id)) {
             return true;
         }
-        // Never auto-wire the container internals
-        if (in_array($id, self::NOT_AUTO_WIRED, true)) {
+        $class = ReflectionCache::canonicalName($id);
+        if ($class === null) {
             return false;
         }
-        // Any concrete instantiable class can be built without definition
-        return ReflectionCache::isInstantiable($id);
+        if ($class !== $id && $this->definitions->has($class)) {
+            return true;
+        }
+        return self::isAutowirable($class);
+    }
+
+    /**
+     * Never auto-wire the container internals (a second container or an empty
+     * Definitions) nor internal PHP classes, which are values or resources
+     * rather than services.
+     *
+     * @param class-string $class
+     */
+    private static function isAutowirable(string $class): bool
+    {
+        if (is_a($class, self::class, true) || $class === Definitions::class) {
+            return false;
+        }
+        if (!ReflectionCache::isInstantiable($class)) {
+            return false;
+        }
+        return !ReflectionCache::reflection($class)[0]->isInternal();
+    }
+
+    /**
+     * A definition registered under an interface or an abstract class must
+     * produce an instance of it, whatever its form (factory, object or class
+     * name). A concrete class id may be remapped to an unrelated class.
+     *
+     * Never autoloads: an id that is not loaded is not checked.
+     *
+     * @throws DefinitionException
+     */
+    private function assertMatchesTypedId(object $instance, string $id): void
+    {
+        if ($instance instanceof $id) {
+            return;
+        }
+        $typed =
+            interface_exists($id, false)
+            || class_exists($id, false) && ReflectionCache::reflection($id)[0]->isAbstract();
+        if ($typed) {
+            $type = $instance::class;
+            throw new DefinitionException(
+                "The definition for `{$id}` produced `{$type}`, which does not implement `{$id}`.",
+            );
+        }
     }
 
     /**

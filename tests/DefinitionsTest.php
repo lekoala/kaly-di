@@ -15,6 +15,7 @@ use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObject2;
 use Kaly\Tests\Mocks\TestObject5;
+use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use ReflectionMethod;
@@ -143,7 +144,7 @@ class DefinitionsTest extends TestCase
         // Parameters and callbacks do not create a definition
         $this->assertFalse($def->has(ContainerInterface::class));
         $this->assertSame(['x' => 1], $def->parametersFor(ContainerInterface::class));
-        $this->assertSame($callback, $def->callbacksFor(ContainerInterface::class)[spl_object_id($callback)]);
+        $this->assertSame($callback, $def->callbacksFor(ContainerInterface::class)['#' . spl_object_id($callback)]);
     }
 
     public function testContainerInterfaceCanBeBoundToACompatibleClass(): void
@@ -155,6 +156,7 @@ class DefinitionsTest extends TestCase
         $this->assertSame(Container::class, $def->get(ContainerInterface::class));
     }
 
+    #[RequiresSetting('zend.assertions', '1')]
     public function testContainerInterfaceRejectsAnIncompatibleBinding(): void
     {
         $def = Definitions::create();

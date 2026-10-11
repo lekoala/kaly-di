@@ -17,6 +17,7 @@ use Kaly\Tests\Mocks\TestObject5;
 use Kaly\Tests\Mocks\TestObject5Parent;
 use Kaly\Tests\Mocks\TestObject6;
 use Kaly\Tests\Mocks\TestObjectB;
+use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
@@ -168,6 +169,7 @@ class InjectorTest extends TestCase
         }
     }
 
+    #[RequiresSetting('zend.assertions', '1')]
     public function testInjectorArgumentPassing(): void
     {
         $injector = new Injector(new Container());

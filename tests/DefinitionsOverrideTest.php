@@ -12,6 +12,7 @@ use Kaly\Tests\Mocks\TestAlternativeObject;
 use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObject2;
+use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -91,6 +92,7 @@ class DefinitionsOverrideTest extends TestCase
         $def->rebind('mailer', TestObject::class);
     }
 
+    #[RequiresSetting('zend.assertions', '1')]
     public function testRebindRejectsIncompatibleClassStringWhenIdIsAnInterface(): void
     {
         $def = Definitions::create()->bind(TestInterface::class, TestObject::class);
@@ -99,6 +101,7 @@ class DefinitionsOverrideTest extends TestCase
         $def->rebind(TestInterface::class, TestObject2::class);
     }
 
+    #[RequiresSetting('zend.assertions', '1')]
     public function testRebindRejectsIncompatibleObjectWhenIdIsAnInterface(): void
     {
         $def = Definitions::create()->bind(TestInterface::class, TestObject::class);

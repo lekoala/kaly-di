@@ -1,6 +1,14 @@
 {
     "name": "lekoala/kaly-di",
+    "description": "Small PSR-11 autowiring container for PHP 8.3+",
     "type": "library",
+    "keywords": [
+        "container",
+        "dependency-injection",
+        "di",
+        "psr-11",
+        "autowiring"
+    ],
     "license": "MIT",
     "authors": [
         {
@@ -13,7 +21,7 @@
         "psr/container": "^1.1.2|^2.0.2"
     },
     "require-dev": {
-        "carthage-software/mago": "^1",
+        "carthage-software/mago": "1.48.1",
         "composer/ca-bundle": "^1.5",
         "phpstan/phpstan": "^2.2",
         "phpunit/phpunit": "^12.5"
@@ -39,6 +47,7 @@
             "@mago:format"
         ],
         "phpunit": "@php -d zend.assertions=1 vendor/bin/phpunit",
+        "phpunit:prod": "@php -d zend.assertions=-1 vendor/bin/phpunit",
         "phpstan": "phpstan analyse src --memory-limit=-1",
         "mago:lint": "mago lint --minimum-report-level warning src tests",
         "mago:format": "mago fmt --check",

@@ -105,11 +105,17 @@ Pure, dependency-free utilities live in `Kaly\Di\Reflection`:
 ```php
 use Kaly\Di\Reflection;
 
+Reflection::tryClass($name); // ?ReflectionClass, cached, never caches misses
 Reflection::getShortClassName($object); // e.g. "MyService"
 Reflection::getClassNamespace(MyService::class); // e.g. "App\Service"
 Reflection::getParameterTypeName($reflectionParameter); // ?class-string
 Reflection::getParameterClass($reflectionParameter); // ?ReflectionClass
 ```
+
+`tryClass()` returns `null` for a missing class, an interface or a trait. It shares
+the container's reflection cache: one entry per class whatever the spelling, and
+failed lookups are never cached, so it is safe for names built from a request (a
+controller resolved from a route). Autoloader exceptions propagate.
 
 Parameter resolution (`Parameters::resolveParameters()`)
 is the internal engine of `Container`/`Injector` and is deliberately not part

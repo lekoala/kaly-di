@@ -6,14 +6,85 @@ namespace Kaly\Tests;
 
 use Kaly\Di\Reflection;
 use Kaly\Tests\Mocks\ReflTestMock;
+use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestUnionClass;
 use PHPUnit\Framework\TestCase;
 use ReflectionClass;
+use RuntimeException;
 use stdClass;
+
+trait ReflectionTestTrait {}
+
+enum ReflectionTestEnum
+{
+    case A;
+}
 
 class ReflectionTest extends TestCase
 {
+    public function testTryClass(): void
+    {
+        $refl = Reflection::tryClass(TestObject::class);
+        $this->assertInstanceOf(ReflectionClass::class, $refl);
+        $this->assertSame(TestObject::class, $refl->getName());
+
+        // Cached: same reflection, whatever the spelling
+        $this->assertSame($refl, Reflection::tryClass(TestObject::class));
+        $this->assertSame($refl, Reflection::tryClass(strtolower(TestObject::class)));
+        $this->assertSame($refl, Reflection::tryClass('\\' . strtoupper(TestObject::class)));
+    }
+
+    public function testTryClassOnlyFindsClasses(): void
+    {
+        $this->assertNull(Reflection::tryClass('Kaly\\Tests\\NoSuchClass'));
+        $this->assertNull(Reflection::tryClass(TestInterface::class));
+        $this->assertNull(Reflection::tryClass(ReflectionTestTrait::class));
+        $this->assertSame(ReflectionTestEnum::class, Reflection::tryClass(ReflectionTestEnum::class)?->getName());
+    }
+
+    /**
+     * A failed lookup is not cached: a class that becomes loadable later is
+     * found.
+     */
+    public function testTryClassFindsAClassLoadedLater(): void
+    {
+        $class = 'KalyLateLoaded\\LateLoadedClass';
+        $enabled = false;
+        $loader = static function (string $name) use ($class, &$enabled): void {
+            if ($enabled && $name === $class) {
+                require __DIR__ . '/fixtures/LateLoadedClass.php';
+            }
+        };
+        spl_autoload_register($loader);
+
+        try {
+            $this->assertNull(Reflection::tryClass($class));
+            $enabled = true;
+            $this->assertSame($class, Reflection::tryClass($class)?->getName());
+        } finally {
+            spl_autoload_unregister($loader);
+        }
+    }
+
+    public function testTryClassPropagatesAutoloaderErrors(): void
+    {
+        $loader = static function (string $name): void {
+            if ($name === 'KalyBrokenAutoload\\Broken') {
+                throw new RuntimeException('autoloader failed');
+            }
+        };
+        spl_autoload_register($loader);
+
+        try {
+            $this->expectException(RuntimeException::class);
+            $this->expectExceptionMessage('autoloader failed');
+            Reflection::tryClass('KalyBrokenAutoload\\Broken');
+        } finally {
+            spl_autoload_unregister($loader);
+        }
+    }
+
     public function testGetClassName(): void
     {
         $this->assertSame(stdClass::class, Reflection::getClassName(stdClass::class));

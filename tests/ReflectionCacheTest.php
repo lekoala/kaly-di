@@ -105,6 +105,30 @@ class ReflectionCacheTest extends TestCase
         $this->assertArrayNotHasKey($unknown, $hierarchy);
     }
 
+    /**
+     * Class names are case-insensitive: every spelling shares one entry, so
+     * names from user input cannot grow the caches.
+     */
+    public function testEverySpellingSharesOneCacheEntry(): void
+    {
+        $spellings = [
+            ReflectionCacheTestChild::class,
+            strtolower(ReflectionCacheTestChild::class),
+            '\\' . strtoupper(ReflectionCacheTestChild::class),
+        ];
+        foreach ($spellings as $spelling) {
+            $this->assertSame(ReflectionCacheTestChild::class, ReflectionCache::canonicalName($spelling));
+            $this->assertSame(ReflectionCacheTestChild::class, ReflectionCache::tryReflection($spelling)?->getName());
+            $this->assertTrue(ReflectionCache::isInstantiable($spelling));
+        }
+
+        foreach (['reflection', 'names'] as $cache) {
+            $entries = (new ReflectionProperty(ReflectionCache::class, $cache))->getValue();
+            $this->assertIsArray($entries);
+            $this->assertCount(1, $entries, $cache);
+        }
+    }
+
     public function testClear(): void
     {
         $result = ReflectionCache::reflection(ReflectionCacheTestChild::class);

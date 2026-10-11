@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `Reflection::tryClass($name)`: the cached `ReflectionClass` of an existing class,
+  or `null` (also for interfaces and traits). Misses are never cached and
+  autoloader exceptions propagate.
+
 ### Changed (composition contract)
 
 - Internal PHP classes (`PDO`, `DateTimeImmutable`, `ArrayObject`, `stdClass`...)
@@ -37,6 +43,8 @@ All notable changes to this project are documented in this file.
 - `Injector::invoke()` no longer fills its reflection cache with entries that can
   never be hit for non-closure callables.
 - Faster `get()` for already resolved entries.
+- Reflection caches are keyed by the normalized class name: spelling variants of
+  a class (`Foo`, `foo`, `\FOO`) share one entry instead of growing the cache.
 
 ## [0.3.2]
 

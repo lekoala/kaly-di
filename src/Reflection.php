@@ -9,18 +9,36 @@ use ReflectionNamedType;
 use ReflectionParameter;
 
 /**
- * Pure reflection helpers without container dependency.
+ * Reflection helpers without container dependency.
  *
  * Unlike Parameters (internal resolution engine), these methods never read
  * definitions, never throw container exceptions and are safe to use anywhere.
  *
- * For process-duration caching of constructor signatures and class
- * hierarchies, see {@see ReflectionCache} (internal).
+ * tryClass() shares the process-duration cache used by the container
+ * ({@see ReflectionCache}, internal); the other helpers are stateless.
  *
  * @api
  */
 final class Reflection
 {
+    /**
+     * The reflection of an existing class, or null when it does not exist.
+     *
+     * Interfaces and traits are not classes and return null; enums are
+     * classes. Successful lookups are cached for the duration of the process,
+     * once per class whatever the spelling of `$class` (class names are
+     * case-insensitive), so names from user input cannot grow the cache.
+     * Failed lookups are never cached: a class loaded later is found.
+     * Exceptions thrown by an autoloader propagate: null means "no such
+     * class", not "loading failed".
+     *
+     * @return ReflectionClass<object>|null
+     */
+    public static function tryClass(string $class): ?ReflectionClass
+    {
+        return ReflectionCache::tryReflection($class);
+    }
+
     /**
      * The first non-builtin named type of a parameter, without instantiating
      * a ReflectionClass.

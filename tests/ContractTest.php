@@ -22,6 +22,8 @@ use Kaly\Tests\Mocks\TestNestedRoot;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObjectA;
 use Kaly\Tests\Mocks\TestObjectB;
+use Kaly\Tests\Mocks\TestOptionalDeps;
+use Kaly\Tests\Mocks\TestOptionalUnbuildable;
 use LogicException;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
@@ -360,6 +362,31 @@ class ContractTest extends TestCase
             $this->assertStringContainsString(TestNestedMiddle::class, $e->getMessage());
             $this->assertInstanceOf(LogicException::class, $e->getPrevious());
         }
+    }
+
+    /**
+     * A nullable default is a fallback, not a preference for null: an
+     * autowirable dependency is injected, an unavailable one falls back.
+     */
+    public function testOptionalDependencyIsAutowiredWhenAvailable(): void
+    {
+        $inst = (new Container())->get(TestOptionalDeps::class);
+
+        $this->assertInstanceOf(TestObject::class, $inst->object);
+        $this->assertNull($inst->interface);
+    }
+
+    public function testAConfiguredNullKeepsAnOptionalDependencyEmpty(): void
+    {
+        $di = new Container(Definitions::create()->parameter(TestOptionalDeps::class, 'object', null));
+
+        $this->assertNull($di->get(TestOptionalDeps::class)->object);
+    }
+
+    public function testAnOptionalDependencyThatCannotBeBuiltDoesNotFallBackToNull(): void
+    {
+        $this->expectException(UnresolvableParameterException::class);
+        (new Container())->get(TestOptionalUnbuildable::class);
     }
 
     /**

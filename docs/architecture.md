@@ -160,6 +160,35 @@ require guessing a dependency, a scope or a lifecycle is out of scope unless it 
 explicitly configured. The corresponding user-visible invariants are locked by
 `tests/ContractTest.php`.
 
+### Nullable and optional dependencies
+
+A nullable type or a default value does not opt a parameter out of autowiring:
+the default is a fallback, not a preference for `null`.
+
+```php
+public function __construct(?Logger $logger = null) {}
+```
+
+The usual precedence applies:
+
+1. a configured parameter wins, including an explicit `null`;
+2. otherwise, an available candidate (`has()`) is resolved and injected, including
+   an autowirable user class;
+3. otherwise, the default value is used, then `null`;
+4. if the candidate exists but cannot be built, the error propagates: there is no
+   silent fallback to the default.
+
+So `?Logger $logger = null` receives a `Logger` whenever `Logger` is autowirable.
+Interfaces and internal PHP classes are not autowired, so they fall back to the
+default unless defined. To keep the dependency `null`, configure it:
+
+```php
+$definitions->parameter(Service::class, 'logger', null);
+```
+
+A union with several available candidates is still ambiguous, even with a default
+value.
+
 ### Container lifetime
 
 A container's lifetime is the lifetime of its shared services: every entry returned

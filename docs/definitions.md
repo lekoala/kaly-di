@@ -111,6 +111,11 @@ $definitions
 When an id is bound to a class, parameters can be declared for either the id or the
 concrete class. The id takes precedence.
 
+A configured value always wins, `null` included. This is how to keep an optional
+dependency such as `?Logger $logger = null` empty: without configuration it is
+autowired when possible (see
+[Nullable and optional dependencies](./architecture.md#nullable-and-optional-dependencies)).
+
 Every configured parameter name must match a constructor parameter of the class
 being built. A name that does not exist is a configuration error: it throws a
 `DefinitionException` at resolution time (before any parameter closure runs),

@@ -168,12 +168,16 @@ class Container implements ContainerInterface
      *
      * `true` means:
      * - an explicit definition or binding,
+     * - an existing interface matched by a naming convention,
      * - a concrete, instantiable, user-defined class (auto-wiring).
      *
      * Class ids are matched like PHP class names: case-insensitive, with or
      * without a leading backslash.
      *
-     * Interfaces and abstract classes therefore return false unless bound.
+     * Interfaces return false unless bound or matched by a convention, and a
+     * convention match reports `true` even when the computed implementation
+     * is missing: `get()` then fails explicitly instead of being masked by a
+     * nullable default. Abstract classes therefore return false unless bound.
      * Internal PHP classes (PDO, DateTimeImmutable, ArrayObject...) and the
      * container itself are never auto-wired: they must be defined. For a
      * concrete class, `has()` only reports that the class itself is
@@ -190,7 +194,15 @@ class Container implements ContainerInterface
         if ($class === null) {
             return false;
         }
-        return $this->definitions->has($class) || self::isAutowirable($class);
+        if ($this->definitions->has($class)) {
+            return true;
+        }
+        // Conventions only apply to existing interfaces; concrete classes
+        // keep the autowiring path below untouched.
+        if (ConventionRule::matches($this->definitions, $class)) {
+            return true;
+        }
+        return self::isAutowirable($class);
     }
 
     /**
@@ -260,6 +272,11 @@ class Container implements ContainerInterface
             // Can be an interface binding
             // eg: SomeInterface::class => MyClass::class
             $class = $definition;
+        } elseif (($convention = ConventionRule::classFor($this->definitions, $id)) !== null) {
+            // ...or an existing interface can be resolved by a convention.
+            // Explicit definitions always win; overlapping conventions fail
+            // inside classFor() instead of picking one silently.
+            $class = $convention;
         }
 
         if (!class_exists($class)) {

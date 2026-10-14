@@ -1,0 +1,9 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Kaly\Tests\Convention\Fixtures\Booking\Infrastructure;
+
+use Kaly\Tests\Convention\Fixtures\Booking\Domain\Appointments;
+
+final class InMemoryAppointments implements Appointments {}

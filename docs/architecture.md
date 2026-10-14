@@ -123,6 +123,10 @@ make(Foo::class)
 new service definition
     => set() / bind()
 
+naming convention
+    => bindConvention(), computed on demand, no scan
+    => explicit definition wins; several matches fail
+
 duplicate definition
     => fail
     => never silently override
@@ -242,7 +246,10 @@ $definitions->set(Foo::class, fn () => new Foo());
 - an explicit definition or binding,
 - a concrete, instantiable, user-defined class (auto-wiring).
 
-Interfaces and abstract classes therefore return `false` unless they are bound.
+Interfaces therefore return `false` unless they are bound or matched by a
+`bindConvention()` rule (a match reports `true` even when the computed
+implementation is missing, so `get()` fails explicitly). Abstract classes
+return `false` unless bound.
 Internal PHP classes (`PDO`, `DateTimeImmutable`, `ArrayObject`...) and the
 container itself (including subclasses) are never auto-wired: they are values or
 resources rather than services, and must be defined. A parameter typed

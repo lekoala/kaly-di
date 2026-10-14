@@ -89,6 +89,43 @@ $definitions
 $container->get(FooInterface::class) === $container->get(Foo::class); // true
 ```
 
+## Binding by Convention
+
+When many interfaces map to implementations by name, `bindConvention()` derives
+the binding on demand instead of enumerating every pair:
+
+```php
+$definitions->bindConvention(
+    'App\\{module}\\Domain\\{name}',
+    'App\\{module}\\Infrastructure\\Doctrine{name}',
+);
+```
+
+A request for `App\Booking\Domain\Appointments` then builds
+`App\Booking\Infrastructure\DoctrineAppointments`, with no directory scan, no
+class list and no compilation. Only two placeholders exist: `{module}` (one or
+more namespace segments) and `{name}` (a single segment). `{name}` is mandatory
+in the source template, each variable is captured at most once, and the target
+may only reuse captured variables.
+
+The rules are deliberately narrow:
+
+- Only existing interfaces are eligible. A concrete class in `Domain` keeps its
+  normal autowiring; abstract classes still need an explicit `bind()`.
+- A convention never creates an explicit definition: an explicit `bind()` for
+  the same interface wins naturally, with no conflict and no `rebind()` needed.
+- An identical source template cannot be declared twice. Overlapping templates
+  are allowed, but when several match the same requested interface, resolution
+  fails instead of picking one silently: bind that interface explicitly.
+- The computed class must exist, implement the interface, be instantiable and
+  user-defined; otherwise `get()` throws an error naming the convention used.
+- `has()` returns `true` for a matched interface even when the computed class
+  is missing, so a nullable dependency cannot silently mask a naming mistake —
+  just like an explicit binding whose construction fails.
+- Lifecycle matches `bind()`: the interface id and the concrete class id are
+  two distinct shared instances. For several interfaces sharing one instance,
+  use explicit `alias()` entries instead.
+
 `get(alias)` delegates to `get(target)`: the target is built and configured
 exactly once. The target must already be defined (a value or another alias).
 Aliases cannot carry their own parameters or callbacks, and alias cycles are
@@ -209,6 +246,8 @@ $definitions1->merge($definitions2); // ok: disjoint ids
 
 The check runs before anything is merged, so a failed `merge()` leaves the target
 definitions completely unchanged (services, parameters and callbacks alike).
+Conventions merge the same way: an identical source template on both sides is a
+conflict, while distinct (even overlapping) templates coexist.
 
 Parameters and callbacks keep their existing merge semantics (later values win
 per key): they customize a definition rather than choosing which implementation
@@ -303,9 +342,9 @@ Use the named `expected:` argument so the intent stays obvious at the call site.
 ### Locking
 
 Once a `Definitions` object is locked, it cannot be modified. This prevents runtime
-changes to the container configuration. Any mutator (`set()`, `bind()`, `rebind()`,
-`parameter()`, `parameters()`, `callback()`, `merge()`) then throws a
-`DefinitionException`.
+changes to the container configuration. Any mutator (`set()`, `bind()`,
+`bindConvention()`, `rebind()`, `parameter()`, `parameters()`, `callback()`,
+`merge()`) then throws a `DefinitionException`.
 
 Locking is enforced at runtime, whether or not assertions are enabled, so the
 guarantee holds in production too.

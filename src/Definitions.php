@@ -84,6 +84,16 @@ final class Definitions
     private bool $locked = false;
 
     /**
+     * Naming conventions, in registration order.
+     *
+     * Conventions never create explicit definitions: they are resolved on
+     * demand for interfaces with no explicit value or alias.
+     *
+     * @var list<ConventionRule>
+     */
+    private array $conventions = [];
+
+    /**
      * You can create the definitions with a basic array that maps ids to a class name, an object or a closure.
      *
      * @param array<string,class-string|object> $definitions
@@ -146,10 +156,30 @@ final class Definitions
             );
         }
 
+        // Conventions merge additively too: an identical source template on
+        // both sides owns the same decision. Overlapping (but distinct)
+        // templates are allowed; a real ambiguity fails at resolution.
+        $currentFroms = array_map(static fn(ConventionRule $rule): string => $rule->from, $this->conventions);
+        $duplicateFroms = [];
+        foreach ($definitions->conventions as $rule) {
+            if (in_array($rule->from, $currentFroms, true)) {
+                $duplicateFroms[] = $rule->describe();
+            }
+        }
+        if ($duplicateFroms !== []) {
+            sort($duplicateFroms);
+            $list = implode("\n", array_map(static fn(string $rule): string => '- ' . $rule, $duplicateFroms));
+            throw new DefinitionException(
+                "Cannot merge definitions: the following conventions are already defined:\n{$list}\n"
+                . 'Merge is additive and never overrides conventions.',
+            );
+        }
+
         // Build the whole result first: a failed merge must leave this object untouched.
         $values = array_replace($this->values, $incoming);
         $aliases = array_replace($this->aliases, $incomingAliases);
         $sources = array_replace($this->sources, $definitions->getSources());
+        $conventions = [...$this->conventions, ...$definitions->conventions];
 
         $callbacks = $this->callbacks;
         foreach ($definitions->getCallbacks() as $key => $entries) {
@@ -166,6 +196,7 @@ final class Definitions
         $this->values = $values;
         $this->aliases = $aliases;
         $this->sources = $sources;
+        $this->conventions = $conventions;
         $this->callbacks = $callbacks;
         $this->parameters = $parameters;
 
@@ -311,6 +342,75 @@ final class Definitions
         $this->values[$abstract] = $concrete;
         $this->sources[$abstract] = ['initial' => $source, 'last' => $source];
         return $this;
+    }
+
+    /**
+     * Declare a naming convention for interfaces, resolved on demand.
+     *
+     * Only the `{module}` (one or more namespace segments) and `{name}` (a
+     * single segment) placeholders are allowed. `{name}` is mandatory in the
+     * source template, each variable is captured at most once, and the target
+     * may only reuse captured variables:
+     *
+     * ```php
+     * $definitions->bindConvention(
+     *     'App\\{module}\\Domain\\{name}',
+     *     'App\\{module}\\Infrastructure\\Doctrine{name}',
+     * );
+     * ```
+     *
+     * A convention never creates an explicit definition: an explicit `bind()`
+     * (or `set()`/`alias()`) for the same interface wins naturally, and no
+     * `rebind()` is needed to override it. Overlapping conventions are
+     * allowed at registration; when several match the same requested
+     * interface, resolution fails instead of picking one. Only existing
+     * interfaces are eligible, and only at resolution time.
+     *
+     * @param string|null $source Optional provenance label, for diagnostics
+     */
+    public function bindConvention(string $from, string $to, ?string $source = null): self
+    {
+        $this->assertNotLocked();
+        $rule = ConventionRule::parse($from, $to, $source);
+        foreach ($this->conventions as $existing) {
+            if ($existing->from === $rule->from) {
+                throw new DefinitionException(
+                    "Convention `{$rule->from}` is already defined. Overlapping conventions are allowed, but the same source template cannot be declared twice.",
+                );
+            }
+        }
+        $this->conventions[] = $rule;
+        return $this;
+    }
+
+    /**
+     * Candidate implementations for a canonical id, in registration order.
+     *
+     * Pure string transformation: never autoloads, never reflects, never
+     * caches misses. The caller decides when an id is eligible (only existing
+     * interfaces) and how to report zero, one or several matches.
+     *
+     * @param class-string $id
+     * @return list<array{candidate:string,from:string,to:string,source:?string}>
+     *
+     * @internal
+     */
+    public function conventionCandidates(string $id): array
+    {
+        $id = DefinitionGuard::normalizeId($id);
+        $matches = [];
+        foreach ($this->conventions as $rule) {
+            $candidate = $rule->candidateFor($id);
+            if ($candidate !== null) {
+                $matches[] = [
+                    'candidate' => $candidate,
+                    'from' => $rule->from,
+                    'to' => $rule->to,
+                    'source' => $rule->source,
+                ];
+            }
+        }
+        return $matches;
     }
 
     /**

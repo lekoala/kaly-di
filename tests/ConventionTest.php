@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use DateTimeImmutable;
+use DateTimeInterface;
 use Kaly\Di\ContainerException;
+use Kaly\Di\ConventionRule;
 use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Di\ReferenceNotFoundException;
 use Kaly\Di\UnresolvableParameterException;
+use Kaly\Tests\Convention\Fixtures\Abs\Domain\Task;
 use Kaly\Tests\Convention\Fixtures\Booking\Domain\Ambig;
 use Kaly\Tests\Convention\Fixtures\Booking\Domain\Appointments;
 use Kaly\Tests\Convention\Fixtures\Booking\Domain\ConcreteService;
@@ -21,9 +25,12 @@ use Kaly\Tests\Convention\Fixtures\Catalog\Infrastructure\DoctrineProducts;
 use Kaly\Tests\Convention\Fixtures\Needs\Domain\Service;
 use Kaly\Tests\Convention\Fixtures\Review\Domain\Répertoire;
 use Kaly\Tests\Convention\Fixtures\Review\Infrastructure\DoctrineRépertoire;
+use Kaly\Tests\Convention\Fixtures\Shop\Sales\Domain\Order;
+use Kaly\Tests\Convention\Fixtures\Shop\Sales\Infrastructure\DoctrineOrder;
 use Kaly\Tests\Convention\Fixtures\Wrong\Domain\Thing;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use ReflectionMethod;
 
 class ConventionTest extends TestCase
 {
@@ -149,13 +156,53 @@ class ConventionTest extends TestCase
 
     public function testParametersAndCallbacksApplyToConventionBuilds(): void
     {
+        $calls = 0;
         $container = Definitions::create()
             ->bindConvention(self::FROM, self::TO)
             ->parameters(Appointments::class, tag: 'custom')
-            ->callback(Appointments::class, fn(DoctrineAppointments $instance): DoctrineAppointments => $instance)
+            ->callback(Appointments::class, function () use (&$calls): void {
+                $calls++;
+            })
             ->createContainer();
 
         $this->assertSame('custom', $container->get(Appointments::class)->tag);
+        // Callbacks run once: the second get() reuses the shared instance.
+        $container->get(Appointments::class);
+        $this->assertSame(1, $calls);
+    }
+
+    public function testModuleCapturesSeveralSegments(): void
+    {
+        $container = $this->definitions()->createContainer();
+
+        $this->assertInstanceOf(DoctrineOrder::class, $container->get(Order::class));
+    }
+
+    public function testAbstractCandidateFails(): void
+    {
+        $container = $this->definitions()->createContainer();
+
+        $this->assertTrue($container->has(Task::class));
+        $this->expectException(DefinitionException::class);
+        $this->expectExceptionMessage('not instantiable');
+        $container->get(Task::class);
+    }
+
+    public function testInternalCandidateIsRejected(): void
+    {
+        // Unreachable through get() — internal classes all live in the global
+        // namespace, which no source template can match — so the guard is
+        // exercised directly (precedent: DefinitionsTest uses ReflectionMethod).
+        $assert = new ReflectionMethod(ConventionRule::class, 'assertCandidate');
+
+        $this->expectException(DefinitionException::class);
+        $this->expectExceptionMessage('internal PHP class');
+        $assert->invoke(null, DateTimeInterface::class, DateTimeImmutable::class, [
+            'candidate' => DateTimeImmutable::class,
+            'from' => self::FROM,
+            'to' => self::TO,
+            'source' => null,
+        ]);
     }
 
     public function testConstructorFailureKeepsTheResolutionPath(): void

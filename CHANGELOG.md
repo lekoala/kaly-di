@@ -4,6 +4,14 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- `Definitions::bindConvention($from, $to)`: derive interface bindings on
+  demand from a naming template (e.g. `'App\\{module}\\Domain\\{name}'` =>
+  `'App\\{module}\\Infrastructure\\Doctrine{name}'`), with no scan or
+  compilation. An explicit `bind()` wins, duplicate templates are rejected,
+  ambiguities fail at resolution, and lifecycle matches `bind()`.
+
 ## [0.4.0]
 
 ### Added

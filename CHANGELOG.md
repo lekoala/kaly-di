@@ -4,6 +4,12 @@ All notable changes to this project are documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+
+- Development argument validation now checks union, intersection and combined
+  types on variadic values before resolving dependencies. Invalid values no
+  longer run dependency factories before PHP rejects the call.
+
 ### Added
 
 - `Definitions::bindConvention($from, $to)`: derive interface bindings on

@@ -161,13 +161,11 @@ final class Parameters
                 $variadicValues = array_key_exists($paramName, $named)
                     ? self::namedVariadicValue($paramName, $named[$paramName])
                     : array_slice($positional, $position);
-                if ($paramType instanceof ReflectionNamedType) {
-                    foreach ($variadicValues as $value) {
-                        assert(
-                            TypeMatcher::matches($value, $paramType, $parameter->getDeclaringClass()),
-                            "parameter `{$paramName}` doesn't support " . get_debug_type($value),
-                        );
-                    }
+                foreach ($variadicValues as $value) {
+                    assert(
+                        TypeMatcher::matches($value, $paramType, $parameter->getDeclaringClass()),
+                        "parameter `{$paramName}` doesn't support " . get_debug_type($value),
+                    );
                 }
                 continue;
             }

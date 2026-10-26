@@ -173,3 +173,25 @@ instance when a factory returns something other than an object or a class-string
 ## Examples and Testing
 
 Check the [unit tests](./tests) for comprehensive usage examples covering all features.
+
+Run mutation testing with [Infection](https://infection.github.io/guide/) to check
+whether the tests detect changes to the source code:
+
+```bash
+composer install
+composer infection
+```
+
+Use PHP 8.4+ for PHPUnit 12 and a working coverage driver (Xdebug, PCOV or
+phpdbg). With Xdebug, set `XDEBUG_MODE=coverage` in your shell. Assertions are
+enabled by the Composer script, just as for `composer phpunit`. Infection runs
+the initial suite in random order before testing mutations of `src`.
+Reports are written to `var/infection.html`, `var/infection.log` and
+`var/infection-summary.txt`.
+
+To reuse PHPUnit coverage, generate XML coverage and a JUnit report first:
+
+```bash
+composer phpunit -- --coverage-xml=var/coverage/coverage-xml --log-junit=var/coverage/junit.xml
+composer infection -- --coverage=var/coverage
+```

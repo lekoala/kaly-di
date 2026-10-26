@@ -334,6 +334,9 @@ involved.
   locks its `Definitions`.
 - `rebind()` requires an existing definition: use `set()` or `bind()` for
   new ids.
+- Configure a service's constructor arguments in one `parameters()` call with
+  named arguments. Reserve `parameter()` for an isolated adjustment; both
+  replace a previously configured value the same way.
 - Constructor parameters declared in `Definitions` apply to
   `Container::get()`. They are not applied to the root class built by
   `Injector::make()`; see [Injector](./injector.md). Object dependencies of

@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Di\UnresolvableParameterException;
 use Kaly\Tests\Mocks\TestNestedLeaf;
 use Kaly\Tests\Mocks\TestNestedMiddle;
 use Kaly\Tests\Mocks\TestNestedRoot;
 use Kaly\Tests\Mocks\TestObject5;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
@@ -60,10 +62,38 @@ class ConfiguredParametersTest extends TestCase
                 . '::$apiKey';
             $this->assertInstanceOf(UnresolvableParameterException::class, $failure);
             $this->assertSame($failure, $e->getPrevious());
+            $this->assertSame(0, $e->getCode());
             $this->assertSame('middle', $e->getParameterName());
             $this->assertSame(TestNestedRoot::class, $e->getObjectId());
             $this->assertSame($path, $e->getResolutionPath());
             $this->assertStringContainsString('Path: ' . $path, $e->getMessage());
         }
+    }
+
+    /** @return array<string,array{string}> */
+    public static function configuredServiceIds(): array
+    {
+        return ['class id' => [TestObject5::class], 'custom id' => ['configured']];
+    }
+
+    #[DataProvider('configuredServiceIds')]
+    public function testUnknownParametersReportSortedNamesAndTheTarget(string $id): void
+    {
+        $definitions = Definitions::create()
+            ->set($id, TestObject5::class)
+            ->parameter($id, 'v', 'valid')
+            ->parameter($id, 'zTypo', 'invalid')
+            ->parameter($id, 'aTypo', 'invalid');
+        $container = $definitions->createContainer();
+        $target = '`' . TestObject5::class . '`';
+        if ($id !== TestObject5::class) {
+            $target .= ' (id `configured`)';
+        }
+
+        $this->expectException(DefinitionException::class);
+        $this->expectExceptionMessage(
+            "Unknown configured parameter(s) for {$target}: `aTypo`, `zTypo`. Available: `v`, `v2`, `arr`, `v3`.",
+        );
+        $container->get($id);
     }
 }

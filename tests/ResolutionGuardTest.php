@@ -8,6 +8,7 @@ use Kaly\Di\CircularReferenceException;
 use Kaly\Di\Container;
 use Kaly\Di\ContainerException;
 use Kaly\Di\Definitions;
+use Kaly\Di\ReferenceNotFoundException;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObjectSelf;
 use LogicException;
@@ -161,6 +162,7 @@ class ResolutionGuardTest extends TestCase
             $this->fail('Expected a ContainerException');
         } catch (ContainerException $e) {
             $this->assertStringContainsString("Unable to check `{$missing}`", $e->getMessage());
+            $this->assertSame(0, $e->getCode());
             $this->assertInstanceOf(RuntimeException::class, $e->getPrevious());
         } finally {
             spl_autoload_unregister($loader);
@@ -187,17 +189,41 @@ class ResolutionGuardTest extends TestCase
 
     public function testFactoryExceptionIsWrappedInContainerException(): void
     {
-        $di = new Container(Definitions::create()->set(
-            'boom',
-            fn(): object => throw new LogicException('factory boom'),
-        ));
+        $cause = new LogicException('factory boom', 42);
+        $di = new Container(Definitions::create()->set('boom', fn(): object => throw $cause));
 
         try {
             $di->get('boom');
             $this->fail('Expected a ContainerException');
         } catch (ContainerException $e) {
             $this->assertStringContainsString('Unable to create object `boom`', $e->getMessage());
-            $this->assertInstanceOf(LogicException::class, $e->getPrevious());
+            $this->assertSame(0, $e->getCode());
+            $this->assertSame($cause, $e->getPrevious());
+        }
+    }
+
+    public function testMissingFactoryDependencyPreservesTheCauseWithoutReportingTheServiceAsMissing(): void
+    {
+        $cause = null;
+        $definitions = Definitions::create()->set('service', function (ContainerInterface $c) use (&$cause): object {
+            try {
+                return $c->get('missing-dependency');
+            } catch (ReferenceNotFoundException $e) {
+                $cause = $e;
+                throw $e;
+            }
+        });
+        $container = $definitions->createContainer();
+
+        $this->assertTrue($container->has('service'));
+        try {
+            $container->get('service');
+            $this->fail('Expected a dependency failure');
+        } catch (ContainerException $e) {
+            $this->assertSame('Unable to create object `service`: `missing-dependency` is not set', $e->getMessage());
+            $this->assertSame(0, $e->getCode());
+            $this->assertInstanceOf(ReferenceNotFoundException::class, $cause);
+            $this->assertSame($cause, $e->getPrevious());
         }
     }
 

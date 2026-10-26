@@ -333,9 +333,20 @@ class ContainerTest extends TestCase
      */
     public function testBuildError(): void
     {
-        $this->expectException(ContainerException::class);
         $di = new Container();
-        $di->get(TestExceptionConstructorObject::class);
+
+        try {
+            $di->get(TestExceptionConstructorObject::class);
+            $this->fail('Expected a constructor failure');
+        } catch (ContainerException $e) {
+            $this->assertSame(
+                'Unable to create object `' . TestExceptionConstructorObject::class . '`, threw exception: `Exception`',
+                $e->getMessage(),
+            );
+            $this->assertSame(0, $e->getCode());
+            $this->assertInstanceOf(\Exception::class, $e->getPrevious());
+            $this->assertSame("I don't like to be built", $e->getPrevious()->getMessage());
+        }
     }
 
     /**

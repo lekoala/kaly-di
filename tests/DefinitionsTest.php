@@ -54,11 +54,13 @@ class DefinitionsTest extends TestCase
         $def2 = Definitions::create()->set('obj2', TestObject2::class);
 
         $def1->parameter(TestObject5::class, 'v', 'provided_value');
+        $def1->parameter(TestObject5::class, 'v3', 'retained');
         $def1->callback(TestObject::class, fn($obj) => $obj);
 
         // parameters and callbacks can come from multiple sources, latest merged wins per key
         $def2->parameter(TestObject5::class, 'v2', 'provided value');
         $def2->parameter(TestObject5::class, 'v', 'overwritten');
+        $def2->parameter(TestObject5::class, 'arr', []);
 
         $final = new Definitions();
         $final->merge($def1);
@@ -71,6 +73,13 @@ class DefinitionsTest extends TestCase
         $this->assertSame('provided value', $final->parametersFor(TestObject5::class)['v2']);
         $this->assertArrayHasKey(TestObject::class, $final->getCallbacks());
         $this->assertCount(1, $final->callbacksFor(TestObject::class));
+
+        $instance = $final->createContainer()->get(TestObject5::class);
+        $this->assertInstanceOf(TestObject5::class, $instance);
+        $this->assertSame('overwritten', $instance->v);
+        $this->assertSame('provided value', $instance->v2);
+        $this->assertSame('retained', $instance->v3);
+        $this->assertSame([], $instance->arr);
     }
 
     public function testMergeKeepsUnnamedCallbacksDistinct(): void

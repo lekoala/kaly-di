@@ -10,10 +10,33 @@ use Kaly\Tests\Mocks\Callback\IOrder1;
 use Kaly\Tests\Mocks\Callback\IOrder2;
 use Kaly\Tests\Mocks\Callback\OrderChild;
 use Kaly\Tests\Mocks\Callback\OrderParent;
+use Kaly\Tests\Mocks\TestChild;
+use Kaly\Tests\Mocks\TestGrandparent;
+use Kaly\Tests\Mocks\TestParent;
 use PHPUnit\Framework\TestCase;
 
 class CallbackOrderTest extends TestCase
 {
+    public function testAncestorCallbacksRunFromGrandparentToChild(): void
+    {
+        $order = [];
+        $definitions = Definitions::create()
+            ->callback(TestChild::class, function () use (&$order): void {
+                $order[] = 'child';
+            })
+            ->callback(TestParent::class, function () use (&$order): void {
+                $order[] = 'parent';
+            })
+            ->callback(TestGrandparent::class, function () use (&$order): void {
+                $order[] = 'grandparent';
+            });
+
+        $container = $definitions->createContainer();
+        $instance = $container->get(TestChild::class);
+        $this->assertSame($instance, $container->get(TestChild::class));
+        $this->assertSame(['grandparent', 'parent', 'child'], $order);
+    }
+
     public function testExecutionOrder(): void
     {
         $definitions = Definitions::create()

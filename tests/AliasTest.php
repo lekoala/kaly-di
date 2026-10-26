@@ -8,6 +8,7 @@ use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObject2;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -119,14 +120,73 @@ class AliasTest extends TestCase
 
     public function testMergeCarriesAliases(): void
     {
-        $base = Definitions::create()->set('service', TestObject::class);
-        $incoming = Definitions::create()->set('other', TestObject2::class)->alias('alias', 'other');
+        $base = Definitions::create()->set('service', TestObject::class)->alias('existing', 'service');
+        $incoming = Definitions::create()
+            ->set('other', TestObject2::class)
+            ->parameter('other', 'v', 'merged')
+            ->alias('alias', 'other');
 
         $base->merge($incoming);
 
         $this->assertTrue($base->hasAlias('alias'));
         $this->assertSame('other', $base->getAlias('alias'));
         $this->assertTrue($base->has('other'));
+        $this->assertSame(['existing' => 'service', 'alias' => 'other'], $base->getAliases());
+
+        $container = $base->createContainer();
+        $this->assertSame($container->get('service'), $container->get('existing'));
+        $this->assertSame($container->get('other'), $container->get('alias'));
+    }
+
+    public function testMergeRejectsAnIncomingAliasThatShadowsAService(): void
+    {
+        $base = Definitions::create()->set('alias', TestObject::class);
+        $incoming = Definitions::create()->set('target', TestObject2::class)->alias('alias', 'target');
+        $before = clone $base;
+
+        try {
+            $base->merge($incoming);
+            $this->fail('Expected an alias collision');
+        } catch (DefinitionException $e) {
+            $this->assertStringContainsString('alias', $e->getMessage());
+        }
+
+        $this->assertEquals($before, $base);
+    }
+
+    /** @return array<string,array{bool,bool}> */
+    public static function aliasConfigurationConflicts(): array
+    {
+        return [
+            'incoming parameters' => [false, false],
+            'incoming callbacks' => [false, true],
+            'incoming alias with existing parameters' => [true, false],
+            'incoming alias with existing callbacks' => [true, true],
+        ];
+    }
+
+    #[DataProvider('aliasConfigurationConflicts')]
+    public function testMergeRejectsAliasConfigurationAtomically(bool $incomingAlias, bool $callback): void
+    {
+        $aliases = Definitions::create()->set('service', TestObject::class)->alias('alias', 'service');
+        $configuration = Definitions::create()->set('other', TestObject2::class);
+        if ($callback) {
+            $configuration->callback('alias', fn() => null);
+        } else {
+            $configuration->parameter('alias', 'v', 'invalid');
+        }
+        $base = $incomingAlias ? $configuration : $aliases;
+        $incoming = $incomingAlias ? $aliases : $configuration;
+        $before = clone $base;
+
+        try {
+            $base->merge($incoming);
+            $this->fail('Expected an alias configuration conflict');
+        } catch (DefinitionException $e) {
+            $this->assertSame('`alias` is an alias and cannot have parameters or callbacks.', $e->getMessage());
+        }
+
+        $this->assertEquals($before, $base);
     }
 
     public function testMergeCarriesANumericAlias(): void

@@ -18,6 +18,8 @@ $mutators = [
     'bind' => fn(Definitions $d) => $d->bind(TestInterface::class, TestObject::class),
     'parameter' => fn(Definitions $d) => $d->parameter('service', 'value', 1),
     'parameters' => fn(Definitions $d) => $d->parameters('service', value: 1),
+    'parameters without values' => fn(Definitions $d) => $d->parameters('service'),
+    'bindConvention' => fn(Definitions $d) => $d->bindConvention('App\\Domain\\{name}', 'App\\Infra\\{name}'),
     'callback' => fn(Definitions $d) => $d->callback('service', fn() => null),
     'merge' => fn(Definitions $d) => $d->merge(new Definitions()),
     'rebind' => fn(Definitions $d) => $d->rebind('service', TestObject::class),

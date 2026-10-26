@@ -275,6 +275,30 @@ class ConventionTest extends TestCase
         Definitions::create()->bindConvention($from, $to);
     }
 
+    /** @return array<string,array{string,string}> */
+    public static function emptyTemplates(): array
+    {
+        return [
+            'empty source' => ['', self::TO],
+            'empty target' => [self::FROM, ''],
+        ];
+    }
+
+    #[DataProvider('emptyTemplates')]
+    public function testEmptyTemplatesHaveAnExplicitError(string $from, string $to): void
+    {
+        $this->expectException(DefinitionException::class);
+        $this->expectExceptionMessage('Convention templates must not be empty.');
+        Definitions::create()->bindConvention($from, $to);
+    }
+
+    public function testUnknownTargetPlaceholderHasAnExplicitError(): void
+    {
+        $this->expectException(DefinitionException::class);
+        $this->expectExceptionMessage('unknown placeholder `{other}`');
+        Definitions::create()->bindConvention(self::FROM, self::TO . '{other}');
+    }
+
     public function testMergeRejectsDuplicateConventionsAtomically(): void
     {
         $target = $this->definitions();

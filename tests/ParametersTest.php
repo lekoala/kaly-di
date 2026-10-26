@@ -13,6 +13,7 @@ use Kaly\Di\UnresolvableParameterException;
 use Kaly\Tests\Mocks\ReflTestMock;
 use Kaly\Tests\Mocks\ReflTestMockObject;
 use PDO;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
@@ -25,6 +26,26 @@ use stdClass;
 
 class ParametersTest extends TestCase
 {
+    /** @return array<string,array{array<array-key,mixed>}> */
+    public static function invalidVariadicValues(): array
+    {
+        return [
+            'positional' => [['valid', 42]],
+            'named' => [['names' => ['valid', 42]]],
+        ];
+    }
+
+    #[RequiresSetting('zend.assertions', '1')]
+    #[DataProvider('invalidVariadicValues')]
+    public function testEveryVariadicValueIsTypeChecked(array $arguments): void
+    {
+        $parameters = (new ReflectionFunction(fn(string ...$names): array => $names))->getParameters();
+
+        $this->expectException(AssertionError::class);
+        $this->expectExceptionMessage("parameter `names` doesn't support int");
+        Parameters::resolveParameters($parameters, $arguments);
+    }
+
     public function testResolveConstructorThrowsOnMissingRequired(): void
     {
         $reflection = new ReflectionClass(PDO::class);

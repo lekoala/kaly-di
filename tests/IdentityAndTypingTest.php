@@ -75,7 +75,9 @@ class IdentityAndTypingTest extends TestCase
         }));
 
         $this->assertTrue($di->has('\\' . TestInterface::class));
+        $this->assertTrue($di->has(strtolower(TestInterface::class)));
         $this->assertSame($definition, $di->get('\\' . TestInterface::class));
+        $this->assertSame($definition, $di->get(strtolower(TestInterface::class)));
         $this->assertSame($definition, $di->get(TestInterface::class));
         $this->assertSame(1, $calls);
     }

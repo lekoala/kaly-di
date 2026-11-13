@@ -89,6 +89,69 @@ $definitions
 $container->get(FooInterface::class) === $container->get(Foo::class); // true
 ```
 
+`get(alias)` delegates to `get(target)`: the target is built and configured
+exactly once. The target must already be defined (a value or another alias).
+Aliases cannot carry their own parameters or callbacks, and alias cycles are
+rejected.
+
+> A factory that returns another entry still works, but it is **not** an alias:
+> the returned object is configured again for the alias id, so its callbacks run a
+> second time. Use `alias()` when you want a true alias.
+
+### `bind()` vs `alias()`
+
+In short: `bind()` **chooses an implementation**, `alias()` **shares an identity**.
+
+|                                        | `bind(Interface, Concrete)`                          | `alias(Interface, Concrete)`            |
+| -------------------------------------- | ---------------------------------------------------- | --------------------------------------- |
+| Resolution                             | Builds `Concrete` for the `Interface` id             | Delegates to `get(Concrete)`            |
+| Identity                               | Distinct instance                                    | Same instance                           |
+| Definition (factory) set on `Concrete` | Ignored                                              | Used                                    |
+| Parameters                             | Those of `Concrete`, overridable for `Interface`     | Those of the target only                |
+| Callbacks                              | Run for the `Interface` entry                        | Those of the target, run once           |
+
+Both are useful. `bind()` lets two interfaces share an implementation class
+with independent instances and configurations; `alias()` expresses that they
+are the very same service.
+
+#### Pitfall: a factory on the concrete class is not used by `bind()`
+
+`bind()` only maps an id to a class name. It never looks up the definition of
+that class, so a factory registered for the concrete class is **not** used:
+
+```php
+$definitions
+    ->set(DatabaseTaskDispatcher::class, fn (ContainerInterface $c) => new DatabaseTaskDispatcher(
+        $c->get(TaskStore::class),
+        $c->get(TaskRegistry::class),
+    ))
+    ->bind(TaskDispatcher::class, DatabaseTaskDispatcher::class);
+
+// Autowires a new DatabaseTaskDispatcher: the factory above is ignored,
+// and the instance differs from get(DatabaseTaskDispatcher::class).
+$container->get(TaskDispatcher::class);
+```
+
+This is intentional. If `bind()` switched to `get(Concrete)` whenever a
+definition exists, merely adding a definition (possibly in another module, after
+the `bind()`) would silently turn two independent instances into a shared one.
+
+When the factory should be used, define it once under a canonical id and alias
+the other ids to it:
+
+```php
+$definitions
+    ->set(DatabaseTaskDispatcher::class, fn (ContainerInterface $c) => new DatabaseTaskDispatcher(
+        $c->get(TaskStore::class),
+        $c->get(TaskRegistry::class),
+    ))
+    ->alias(TaskDispatcher::class, DatabaseTaskDispatcher::class)
+    ->alias(ScheduledTaskDispatcher::class, DatabaseTaskDispatcher::class);
+```
+
+If the concrete class does not need to be requested directly, the factory can
+also live under one of the interfaces, with the other ones aliased to it.
+
 ## Binding by Convention
 
 When many interfaces map to implementations by name, `bindConvention()` derives
@@ -125,15 +188,6 @@ The rules are deliberately narrow:
 - Lifecycle matches `bind()`: the interface id and the concrete class id are
   two distinct shared instances. For several interfaces sharing one instance,
   use explicit `alias()` entries instead.
-
-`get(alias)` delegates to `get(target)`: the target is built and configured
-exactly once. The target must already be defined (a value or another alias).
-Aliases cannot carry their own parameters or callbacks, and alias cycles are
-rejected.
-
-> A factory that returns another entry still works, but it is **not** an alias:
-> the returned object is configured again for the alias id, so its callbacks run a
-> second time. Use `alias()` when you want a true alias.
 
 ## Setting Parameters
 

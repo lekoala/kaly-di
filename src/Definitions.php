@@ -326,6 +326,9 @@ final class Definitions
     /**
      * Bind an interface or abstract class to a concrete class
      *
+     * $concrete is built as a separate instance: a factory defined for
+     * $concrete is ignored. Use alias() to share the same instance.
+     *
      * @param class-string $abstract
      * @param class-string $concrete
      * @param string|null $source Optional provenance label, for diagnostics

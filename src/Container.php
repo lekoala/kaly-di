@@ -83,10 +83,12 @@ class Container implements ContainerInterface
             throw new ReferenceNotFoundException("`{$id}` is not set");
         }
 
-        // One shared entry per id: `\Foo` and `foo` resolve as `Foo`.
+        // One shared entry per id: `\Foo` and `foo` resolve as `Foo`. Only the
+        // canonical key is cached, so a worker fed with many spellings cannot
+        // grow the cache or duplicate the shared instance.
         $canonical = $this->canonicalId($id);
         if ($canonical !== $id) {
-            return $this->instances[$id] = $this->get($canonical);
+            return $this->get($canonical);
         }
 
         // An alias delegates to its target: same instance, configured once,

@@ -63,6 +63,33 @@ class IdentityAndTypingTest extends TestCase
         $this->assertSame($inst, $di->get(strtolower(TestObject::class)));
     }
 
+    /**
+     * Spelling variants must not grow the instance cache: only the canonical
+     * id owns the shared entry, so a worker fed by several id producers keeps
+     * one entry per service.
+     */
+    public function testSpellingVariantsShareOneCacheEntry(): void
+    {
+        $instance = new TestObject();
+        $container = Definitions::create()->set(TestObject::class, $instance)->createContainer();
+        $name = TestObject::class;
+
+        for ($mask = 0; $mask < 64; $mask++) {
+            $variant = '';
+            foreach (str_split($name) as $index => $char) {
+                $variant .= ($mask >> ($index % 6)) & 1 ? strtoupper($char) : strtolower($char);
+            }
+            if (($mask % 2) === 1) {
+                $variant = '\\' . $variant;
+            }
+            $this->assertSame($instance, $container->get($variant));
+        }
+
+        $instances = new \ReflectionProperty(Container::class, 'instances');
+
+        $this->assertCount(1, $instances->getValue($container));
+    }
+
     public function testNonCanonicalClassIdUsesTheDefinition(): void
     {
         $calls = 0;

@@ -38,6 +38,9 @@ All notable changes to this project are documented in this file.
   normalization is skipped when no arguments are provided; the configured
   parameter check is skipped when a service has no configured parameters; and
   `callbacksForClass()` returns early when no callbacks are registered.
+- Only the canonical id owns a cached shared instance. Requesting the same class
+  through many spellings (`Foo`, `foo`, `\FOO`) no longer adds one cache entry
+  per spelling; explicitly declared alias ids keep their own entry.
 
 ### Documentation
 

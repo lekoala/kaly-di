@@ -8,8 +8,15 @@ use InvalidArgumentException;
 use Kaly\Di\Container;
 use Kaly\Di\Definitions;
 use Kaly\Di\Injector;
+use Kaly\Di\UnresolvableParameterException;
+use Kaly\Tests\Mocks\TestAltInterface;
+use Kaly\Tests\Mocks\TestInterface;
+use Kaly\Tests\Mocks\TestObject;
+use Kaly\Tests\Mocks\TestObject6;
+use Kaly\Tests\Mocks\TestZIntersectionClass;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
+use Psr\Container\ContainerInterface;
 
 interface CombinedLeft {}
 
@@ -131,5 +138,52 @@ class CombinedTypesTest extends TestCase
         } finally {
             $this->assertSame(0, $calls, 'Invalid explicit arguments must not run dependency factories');
         }
+    }
+
+    /**
+     * Intersections are never autowired, even when every member interface is
+     * available: only a single named type can be a candidate, so a `Foo&Bar`
+     * parameter requires an explicit value satisfying both members.
+     */
+    public function testIntersectionsAreNeverAutowired(): void
+    {
+        $container = Definitions::create()
+            ->bind(TestInterface::class, TestObject::class)
+            ->bind(TestAltInterface::class, TestObject6::class)
+            ->createContainer();
+
+        $this->assertTrue($container->has(TestInterface::class));
+        $this->assertTrue($container->has(TestAltInterface::class));
+
+        $this->expectException(UnresolvableParameterException::class);
+        $container->get(TestZIntersectionClass::class);
+    }
+
+    /**
+     * An explicit value satisfying the whole intersection is accepted: the
+     * configured closure is validated against both members like any
+     * explicit argument.
+     */
+    public function testAnExplicitValueSatisfyingTheIntersectionIsAccepted(): void
+    {
+        $container = Definitions::create()
+            ->parameter(TestObject6::class, 'v', 'test')
+            ->parameter(TestObject6::class, 'v2', 'test2')
+            ->parameter(TestObject6::class, 'arr', [])
+            ->parameter(TestZIntersectionClass::class, 'v', fn(ContainerInterface $c) => $c->get(TestObject6::class))
+            ->createContainer();
+
+        $inst = $container->get(TestZIntersectionClass::class);
+
+        $this->assertInstanceOf(TestZIntersectionClass::class, $inst);
+        $this->assertInstanceOf(TestObject6::class, $inst->v);
+    }
+
+    public function testAnIntersectionWithoutAnExplicitValueIsUnresolvable(): void
+    {
+        $container = new Container();
+
+        $this->expectException(UnresolvableParameterException::class);
+        $container->get(TestZIntersectionClass::class);
     }
 }

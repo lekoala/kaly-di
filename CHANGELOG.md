@@ -71,6 +71,10 @@ All notable changes to this project are documented in this file.
   closures run and surface as a `ContainerException` wrapping the
   `InvalidArgumentException`. `Injector` rejects invalid arguments and
   unsupported signatures before resolving dependencies.
+- Documented that intersection types (`Foo&Bar`) are never autowired, even
+  when every member interface is available: only a single named type can be a
+  candidate, so the dependency must be provided explicitly (validated against
+  both members).
 
 ### Changed
 

@@ -222,6 +222,11 @@ $definitions->parameter(Service::class, 'logger', null);
 A union with several available candidates is still ambiguous, even with a default
 value.
 
+An intersection type (`Foo&Bar`) is never autowired, even when every member
+interface is available: only a single named type can be a candidate. Provide an
+explicit value satisfying the whole intersection — it is validated against both
+members, like any explicit argument.
+
 ### Container lifetime
 
 A container's lifetime is the lifetime of its shared services: every entry returned

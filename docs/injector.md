@@ -137,6 +137,11 @@ $injector->invoke(fn (Foo|Bar $dep) => $dep, $foo); // explicit argument wins
 Candidates are never built to disambiguate, and two ids stay two candidates even
 if they could resolve to the same object.
 
+An intersection type (`Foo&Bar`) is never autowired, even when both members are
+available: only a single named type can be offered to the container. Pass the
+dependency explicitly — an explicit argument is validated against every member
+of the intersection, so an object implementing both is accepted.
+
 ## Calling Functions
 
 You can invoke any PHP callable (closures, method arrays, etc.) and let the injector

@@ -27,7 +27,6 @@ use Kaly\Tests\Mocks\TestObjectSub;
 use Kaly\Tests\Mocks\TestObjectTwoPdosVal;
 use Kaly\Tests\Mocks\TestUnionClass;
 use Kaly\Tests\Mocks\TestVariadicArg;
-use Kaly\Tests\Mocks\TestZIntersectionClass;
 use PDO;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
@@ -60,32 +59,6 @@ class ContainerTest extends TestCase
         $this->assertInstanceOf(TestUnionClass::class, $inst);
         // string|TestObject gets resolved to a TestObject
         $this->assertInstanceOf(TestObject::class, $inst->v);
-    }
-
-    public function testItCanCreateIntersectionObject(): void
-    {
-        $di = new Container(
-            Definitions::create()
-                ->parameter(TestObject6::class, 'v', 'test')
-                ->parameter(TestObject6::class, 'v2', 'test2')
-                ->parameter(TestObject6::class, 'arr', [])
-                ->parameter(
-                    TestZIntersectionClass::class,
-                    'v',
-                    fn(ContainerInterface $c) => $c->get(TestObject6::class),
-                )
-                ->lock(),
-        );
-        $inst = $di->get(TestZIntersectionClass::class);
-        $this->assertInstanceOf(TestZIntersectionClass::class, $inst);
-        $this->assertInstanceOf(TestObject6::class, $inst->v);
-    }
-
-    public function testItFailsToCreateIntersectionObjectWithoutParameter(): void
-    {
-        $di = new Container();
-        $this->expectException(UnresolvableParameterException::class);
-        $di->get(TestZIntersectionClass::class);
     }
 
     public function testItCanCreateNullableObject(): void

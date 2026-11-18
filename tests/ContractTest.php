@@ -190,7 +190,9 @@ class ContractTest extends TestCase
     public function testAnAliasCanBeBuiltExplicitlyWithASetClosure(): void
     {
         $di =
-            new Container(Definitions::create()->set(TestInterface::class, fn(ContainerInterface $c): object => $c->get(TestObject::class)));
+            new Container(Definitions::create()->set(TestInterface::class, fn(ContainerInterface $c): object => $c->get(
+                TestObject::class,
+            )));
 
         $this->assertSame($di->get(TestInterface::class), $di->get(TestObject::class));
     }

@@ -41,6 +41,9 @@ All notable changes to this project are documented in this file.
 - Only the canonical id owns a cached shared instance. Requesting the same class
   through many spellings (`Foo`, `foo`, `\FOO`) no longer adds one cache entry
   per spelling; explicitly declared alias ids keep their own entry.
+- Alias graph validation is linear: nodes already proven acyclic are marked
+  once during a merge, instead of walking the successor chain again for every
+  alias. A 1000-alias chain now merges in constant time per alias.
 
 ### Documentation
 

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use Kaly\Di\AliasValidator;
 use Kaly\Di\ContainerException;
 use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
@@ -220,6 +221,32 @@ class AliasTest extends TestCase
         }
 
         $this->assertEquals($before, $base);
+    }
+
+    public function testAliasValidatorRejectsACycle(): void
+    {
+        $this->expectException(DefinitionException::class);
+        $this->expectExceptionMessage('alias cycle');
+
+        AliasValidator::assertValid([], ['a' => 'b', 'b' => 'a'], [], []);
+    }
+
+    public function testMergeValidatesALongAliasChain(): void
+    {
+        $chain = Definitions::create()->set('service', TestObject::class);
+        $previous = 'service';
+        for ($index = 0; $index < 500; $index++) {
+            $alias = 'a' . $index;
+            $chain->alias($alias, $previous);
+            $previous = $alias;
+        }
+
+        $base = Definitions::create();
+        $base->merge($chain);
+
+        $container = $base->createContainer();
+
+        $this->assertSame($container->get('service'), $container->get('a499'));
     }
 
     public function testMergeCarriesANumericAlias(): void

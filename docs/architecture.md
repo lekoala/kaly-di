@@ -49,23 +49,29 @@ lifetime of that `Container` instance. See
 Application services should normally receive their dependencies directly rather than
 depend on the container itself.
 
-### Extension hooks
+### No subclassing
 
-`Container` subclasses may override `build(string $id): object` and
-`configure(object $instance, string $id): void`. For a service that is not
-cached yet, `get()` runs them in this order:
+`Container` is final, like `Definitions` and `Injector`. The resolution
+internals (identifier normalization, the cycle guard, PSR-11 exception
+normalization, caching only after a successful configuration, cleanup after a
+failure) are invariants the container owns; exposing them as overridable hooks
+would make every internal change a compatibility risk for subclasses.
 
-1. `build()` creates the instance (definition, convention or autowiring).
-2. The class-id check verifies that the instance matches the requested id.
-3. `configure()` runs the registered callbacks.
-4. The fully built and configured instance is cached.
+Every customization a subclass could provide is already declared ahead of
+time in `Definitions`, at the composition root:
 
-An override must preserve these guarantees: return an object from `build()`, do
-not cache the instance before `configure()` ran, and keep Kaly exceptions
-unchanged (or reproduce the same normalization). Tests exercising the hooks live
-in `tests/ContainerExtensionTest.php`. The protected `$building` (cycle guard)
-and `$instances` (shared cache) arrays carry the container invariants; they are
-available to subclasses but are not part of the public runtime API.
+| Need                                              | Mechanism          |
+| ------------------------------------------------- | ------------------ |
+| Choose an implementation                          | `bind()`           |
+| Provide a custom construction                     | `set()` + factory  |
+| Configure an instance after construction          | `callback()`       |
+| Intentionally replace a service                   | `rebind()`         |
+| Share one instance across ids                     | `alias()`          |
+| Declare naming conventions                        | `bindConvention()` |
+
+If behavior must be added around the container itself, wrap it behind
+`ContainerInterface` at the composition root rather than reproducing those
+invariants.
 
 ### No reserved ids (except `stdClass`), no self-registration
 
@@ -274,7 +280,7 @@ Interfaces therefore return `false` unless they are bound or matched by a
 implementation is missing, so `get()` fails explicitly). Abstract classes
 return `false` unless bound.
 Internal PHP classes (`PDO`, `DateTimeImmutable`, `ArrayObject`...) and the
-container itself (including subclasses) are never auto-wired: they are values or
+container itself are never auto-wired: they are values or
 resources rather than services, and must be defined. A parameter typed
 `?\DateTimeImmutable $now = null` therefore falls back to its default unless
 `DateTimeImmutable` is defined.

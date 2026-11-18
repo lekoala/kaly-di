@@ -70,4 +70,37 @@ class ConfigureCallbackTest extends TestCase
         $this->assertSame(1, $calls);
         $this->assertSame('+parent', $inst->getVal());
     }
+
+    /**
+     * Callbacks registered on the class and on the service id both run, in
+     * that order. A composition contract of configure(), independent of any
+     * subclassing: the id-specific callbacks are appended once per built
+     * instance.
+     */
+    public function testNamedCallbacksOnTheClassAndServiceBothRun(): void
+    {
+        $events = [];
+        $definitions = Definitions::create()
+            ->set('service', TestObject::class)
+            ->callback(
+                TestObject::class,
+                function () use (&$events): void {
+                    $events[] = 'class';
+                },
+                'configure',
+            )
+            ->callback(
+                'service',
+                function () use (&$events): void {
+                    $events[] = 'service';
+                },
+                'configure',
+            );
+        $container = $definitions->createContainer();
+
+        $instance = $container->get('service');
+
+        $this->assertSame($instance, $container->get('service'));
+        $this->assertSame(['class', 'service'], $events);
+    }
 }

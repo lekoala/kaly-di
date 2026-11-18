@@ -20,7 +20,6 @@ use Kaly\Tests\Mocks\TestObject2;
 use Kaly\Tests\Mocks\TestOptionalClock;
 use Kaly\Tests\Mocks\TestParent;
 use Kaly\Tests\Mocks\TestSelfTyped;
-use Kaly\Tests\Mocks\TestSubContainer;
 use PDO;
 use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
@@ -189,11 +188,6 @@ class IdentityAndTypingTest extends TestCase
         $now = new DateTimeImmutable();
         $di = new Container(Definitions::create()->set(DateTimeImmutable::class, $now));
         $this->assertSame($now, $di->get(TestOptionalClock::class)->now);
-    }
-
-    public function testContainerSubclassesAreNotAutowired(): void
-    {
-        $this->assertFalse((new Container())->has(TestSubContainer::class));
     }
 
     public function testInterfaceDefinitionMustProduceAnImplementation(): void

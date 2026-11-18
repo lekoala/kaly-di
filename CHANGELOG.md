@@ -60,9 +60,8 @@ All notable changes to this project are documented in this file.
 - Documented that `$callable` (for `invoke()`) and `$class` (for `make()`) are
   owned by the `Injector` signature: a target parameter with that name must be
   passed positionally. Documented the by-reference rejection.
-- Documented the `stdClass` exception to the "no reserved ids" rule, the order
-  and guarantees of the `Container::build()` / `configure()` extension hooks, and
-  that `Parameters` is internal.
+- Documented the `stdClass` exception to the "no reserved ids" rule and that
+  `Parameters` is internal.
 - Classified the `Definitions` read methods: `has()`, `get()`, `getAliases()`,
   `parametersFor()`, `callbacksFor()` and `sourceFor()` are the read API, while
   the raw storage accessors and `expand()` are marked `@internal`.
@@ -75,6 +74,14 @@ All notable changes to this project are documented in this file.
 
 ### Changed
 
+- `Container` is now final, like `Definitions` and `Injector`: customization
+  goes through `Definitions` (`bind()`, factories, `callback()`, `rebind()`,
+  `alias()`, `bindConvention()`), never through subclassing. The former
+  `build()` / `configure()` hooks and the shared state (`$definitions`,
+  `$building`, `$instances`) are private. Breaking since 0.4.1.
+- The `Definitions` runtime helpers used by the Container — `hasAlias()`,
+  `getAlias()`, `allParametersFor()`, `callbacksForClass()` — are marked
+  `@internal`, completing the read API classification.
 - Declare `provide: {"psr/container-implementation": "1.0.0"}` in `composer.json`,
   so consumers can depend on the PSR-11 implementation virtual package.
 

@@ -88,7 +88,7 @@ class InjectorTest extends TestCase
     public function testSingleCandidateIsResolvedThroughTheContainer(): void
     {
         $expected = new TestObject();
-        $container = $this->createMock(Container::class);
+        $container = $this->createMock(ContainerInterface::class);
         $container->method('has')->willReturnCallback(static fn(string $id): bool => $id === TestObject::class);
         $container->expects($this->once())->method('get')->with(TestObject::class)->willReturn($expected);
 
@@ -99,7 +99,7 @@ class InjectorTest extends TestCase
 
     public function testTwoCandidatesRequireAnExplicitArgumentAndNeverCallGet(): void
     {
-        $container = $this->createMock(Container::class);
+        $container = $this->createMock(ContainerInterface::class);
         $container
             ->method('has')
             ->willReturnCallback(
@@ -122,7 +122,7 @@ class InjectorTest extends TestCase
 
     public function testAnExplicitArgumentWinsOverAmbiguityWithoutAnyLookup(): void
     {
-        $container = $this->createMock(Container::class);
+        $container = $this->createMock(ContainerInterface::class);
         $container->expects($this->never())->method('has');
         $container->expects($this->never())->method('get');
 
@@ -134,7 +134,7 @@ class InjectorTest extends TestCase
 
     public function testSingleCandidateFailurePropagatesWithoutFallback(): void
     {
-        $container = $this->createMock(Container::class);
+        $container = $this->createMock(ContainerInterface::class);
         $container->method('has')->willReturnCallback(static fn(string $id): bool => $id === TestObject::class);
         $container
             ->expects($this->once())
@@ -153,7 +153,7 @@ class InjectorTest extends TestCase
 
     public function testTheCurrentContainerCountsAsAContainerInterfaceCandidate(): void
     {
-        $container = $this->createMock(Container::class);
+        $container = $this->createMock(ContainerInterface::class);
         $container->method('has')->willReturnCallback(static fn(string $id): bool => $id === TestObject::class);
         $container->expects($this->never())->method('get');
 

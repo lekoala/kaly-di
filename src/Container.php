@@ -16,26 +16,28 @@ use Psr\Container\NotFoundExceptionInterface;
  * always returns the same object. To create a fresh instance of a concrete
  * class, use the Injector.
  *
- * The runtime API is deliberately limited to ContainerInterface::get() and
- * has(). Configuration lives in Definitions and is only used at the
- * composition root.
+ * The class is final, like Definitions and Injector: customization goes
+ * through Definitions (bind(), factories, callbacks, rebind(), alias(),
+ * conventions), never through subclassing. The runtime API is deliberately
+ * limited to ContainerInterface::get() and has(). Configuration lives in
+ * Definitions and is only used at the composition root.
  *
  * @link https://github.com/devanych/di-container
  * @link https://github.com/capsulephp/di
  */
-class Container implements ContainerInterface
+final class Container implements ContainerInterface
 {
-    protected readonly Definitions $definitions;
+    private readonly Definitions $definitions;
 
     /**
      * @var array<string,true>
      */
-    protected array $building = [];
+    private array $building = [];
 
     /**
      * @var array<string,object>
      */
-    protected array $instances = [];
+    private array $instances = [];
 
     /**
      * @param Definitions|array<string,class-string|object>|null $definitions
@@ -233,9 +235,10 @@ class Container implements ContainerInterface
     }
 
     /**
-     * Never auto-wire the container internals (a second container or an empty
-     * Definitions) nor internal PHP classes, which are values or resources
-     * rather than services.
+     * Never auto-wire the container internals (the container, matched with
+     * is_a() so a class_alias() spelling of its final name is covered too,
+     * or Definitions) nor internal PHP classes, which are values or
+     * resources rather than services.
      *
      * @param class-string $class
      */
@@ -282,7 +285,7 @@ class Container implements ContainerInterface
      *
      * @throws ContainerException
      */
-    protected function build(string $id): object
+    private function build(string $id): object
     {
         // By default, the id is a class...
         $class = $id;
@@ -473,7 +476,7 @@ class Container implements ContainerInterface
      * @param object $instance The instance to configure
      * @param string $id Id in the container
      */
-    protected function configure(object $instance, string $id): void
+    private function configure(object $instance, string $id): void
     {
         $instanceClass = $instance::class;
 

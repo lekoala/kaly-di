@@ -32,8 +32,10 @@ use Psr\Container\ContainerInterface;
  *
  * Read API: has(), get(), getAliases(), parametersFor(), callbacksFor() and
  * sourceFor(). The raw storage accessors (getValues(), getSources(),
- * getParameters(), getCallbacks()) and expand() are internal plumbing used by
- * merge() and the Container; they are not part of the supported public API.
+ * getParameters(), getCallbacks()), the runtime helpers used by the Container
+ * (hasAlias(), getAlias(), allParametersFor(), callbacksForClass(),
+ * conventionCandidates()) and expand() are internal plumbing; they are not
+ * part of the supported public API.
  */
 final class Definitions
 {
@@ -468,6 +470,9 @@ final class Definitions
         return $this->aliases;
     }
 
+    /**
+     * @internal Runtime helper used by the Container.
+     */
     public function hasAlias(string $id): bool
     {
         $id = DefinitionGuard::normalizeId($id);
@@ -475,6 +480,7 @@ final class Definitions
     }
 
     /**
+     * @internal Runtime helper used by the Container.
      * Target of an alias, or null when the id is not an alias.
      */
     public function getAlias(string $id): ?string
@@ -602,6 +608,8 @@ final class Definitions
      * Retrieve parameters for a class, its binding target and the requested id
      * (id wins)
      *
+     * @internal Runtime helper used by Container::build().
+     *
      * $target is the binding target as the definition wrote it. When it spells
      * the concrete class differently (a class_alias() target, a case variant),
      * parameters configured under that spelling still apply instead of silently
@@ -650,6 +658,7 @@ final class Definitions
      *
      * Order: interfaces (alphabetically), then parents (top to bottom), then the class itself.
      *
+     * @internal Runtime helper used by Container::configure().
      * @param class-string $class
      * @return list<callable>
      */

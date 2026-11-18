@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Kaly\Tests;
 
 use InvalidArgumentException;
-use Kaly\Di\Container;
 use Kaly\Di\ContainerException;
 use Kaly\Di\Definitions;
 use Kaly\Di\Parameters;
@@ -328,7 +327,7 @@ class ParametersTest extends TestCase
         $fn = fn(string $a, string $b): string => $a . $b;
         $parameters = (new ReflectionFunction($fn))->getParameters();
 
-        $container = $this->createMock(Container::class);
+        $container = $this->createMock(ContainerInterface::class);
         $container->expects($this->never())->method('has');
         $container->expects($this->never())->method('get');
 
@@ -446,7 +445,7 @@ class ParametersTest extends TestCase
         $parameters = $method->getParameters();
 
         // Create a dummy container for testing
-        $container = $this->createMock(Container::class);
+        $container = $this->createMock(ContainerInterface::class);
         $container
             ->expects($this->once())
             ->method('has')
@@ -464,7 +463,7 @@ class ParametersTest extends TestCase
 
     public function testResolveParametersProvidesTheCurrentContainer(): void
     {
-        $container = $this->createStub(Container::class);
+        $container = $this->createStub(ContainerInterface::class);
         $fn = fn(ContainerInterface $c): ContainerInterface => $c;
         $parameters = (new ReflectionFunction($fn))->getParameters();
 

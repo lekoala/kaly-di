@@ -2,7 +2,7 @@
 
 All notable changes to this project are documented in this file.
 
-## [Unreleased]
+## [0.5.0]
 
 ### Fixed
 
@@ -75,6 +75,10 @@ All notable changes to this project are documented in this file.
   when every member interface is available: only a single named type can be a
   candidate, so the dependency must be provided explicitly (validated against
   both members).
+- Added `docs/versioning.md`: the SemVer tiers, the promised API and
+  behavioral contracts, and the PHP/PSR-11 support policy. `0.5` is the
+  stabilization release that real compositions validate before `1.0` freezes
+  the same surface.
 
 ### Changed
 

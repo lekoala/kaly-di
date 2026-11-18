@@ -97,6 +97,7 @@ Detailed guides are available in the `docs/` directory:
 - [**Configuration**](./docs/configuration.md): scalar values, environment and migration without attributes.
 - [**Async**](./docs/async.md): synchronous resolution, shared services and long-lived processes.
 - [**Architecture**](./docs/architecture.md): design decisions and the PSR-11 boundary.
+- [**Versioning**](./docs/versioning.md): the promised API, `@internal` plumbing and support policy.
 
 ## Reflection Helpers
 

@@ -272,6 +272,30 @@ class InjectorTest extends TestCase
     }
 
     /**
+     * The rejection is signature-level: a callable that merely declares a
+     * by-reference parameter is refused even when the call passes no value
+     * into it. sscanf (variadic `&...$vars`) worked through invoke() in
+     * 0.4.1 and is now a documented break.
+     */
+    public function testSignatureLevelRejectionRefusesCallablesThatPassNoReference(): void
+    {
+        $injector = new Injector(new Container());
+
+        try {
+            $injector->invoke('sscanf', '25 items', '%d %s');
+            $this->fail('Expected a by-reference rejection');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('$vars', $e->getMessage());
+        }
+
+        // The documented escape hatch: call it inside your own closure,
+        // where PHP handles the references natively.
+        $parsed = $injector->invoke(fn(string $input): array => sscanf($input, '%d %s'), '25 items');
+
+        $this->assertSame([25, 'items'], $parsed);
+    }
+
+    /**
      * PHP class names are case-insensitive: the resolver capability must not
      * depend on how the type was written in the callable signature.
      */

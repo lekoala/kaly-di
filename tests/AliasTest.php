@@ -171,6 +171,39 @@ class AliasTest extends TestCase
         }
     }
 
+    /**
+     * The wrapping has one documented exception: an error that already
+     * implements ContainerExceptionInterface keeps its type — it is already
+     * PSR-11-normalized, and wrapping it would only hide the concrete
+     * problem.
+     */
+    public function testAliasTypeCheckKeepsAlreadyNormalizedExceptions(): void
+    {
+        $container = Definitions::create()
+            ->set('target', new TestObject())
+            ->alias('alias', 'target')
+            ->createContainer();
+        $failure = new DefinitionException('already normalized');
+        $autoloader = static function (string $class) use ($failure): void {
+            if ($class === 'alias') {
+                throw $failure;
+            }
+        };
+        spl_autoload_register($autoloader);
+
+        try {
+            $this->assertTrue($container->has('alias'));
+            try {
+                $container->get('alias');
+                $this->fail('Expected the original exception');
+            } catch (DefinitionException $e) {
+                $this->assertSame($failure, $e);
+            }
+        } finally {
+            spl_autoload_unregister($autoloader);
+        }
+    }
+
     public function testAliasIsNotRebindable(): void
     {
         $definitions = Definitions::create()->set('service', TestObject::class)->alias('alias', 'service');

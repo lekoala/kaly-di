@@ -213,6 +213,16 @@ parameter is rejected with an `InvalidArgumentException` before anything is
 resolved, rather than emitting a warning and leaving the caller's variable
 unchanged.
 
+The rejection is signature-level: a callable that merely *declares* a
+by-reference parameter is refused even when the call passes no value into it.
+Functions such as `sscanf` (variadic `&...$vars`) or `preg_match`
+(`&$matches`) are therefore never invokable through the Injector. Call them
+inside your own closure, where PHP handles the references natively:
+
+```php
+$injector->invoke(fn (string $subject) => sscanf($subject, '%d %s'));
+```
+
 ## Argument Validation
 
 Arguments may be positional, named, or a mix of both: a positional prefix followed

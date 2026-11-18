@@ -28,7 +28,8 @@ All notable changes to this project are documented in this file.
 - `get()` normalizes errors raised while checking an alias id, for instance an
   autoloader throwing during the alias type check. `has()` and `get()` therefore
   keep their documented contracts, and the original error remains available as
-  `previous`.
+  `previous`. An error that already implements `ContainerExceptionInterface`
+  keeps its type instead of being wrapped: it is already PSR-11-normalized.
 - `get()` wraps a `NotFoundExceptionInterface` raised while resolving an alias —
   for instance an autoloader looking up one of its own dependencies during the
   type check — in a `ContainerException` with the original as `previous`. An
@@ -37,7 +38,12 @@ All notable changes to this project are documented in this file.
 - `Injector::invoke()` and `Injector::make()` reject callables/constructors with a
   by-reference parameter with an `InvalidArgumentException` before resolution.
   Reflection cannot preserve the caller's reference, so passing a value used to
-  emit a warning and leave the caller's variable unchanged.
+  emit a warning and leave the caller's variable unchanged. The rejection is
+  signature-level and therefore breaks calls that worked in 0.4.1 while passing
+  no reference at all: `invoke('sscanf', '25 items', '%d %s')` used to return
+  `[25, 'items']` and now throws, because `sscanf` merely declares a
+  by-reference variadic. Call such functions inside your own closure, where PHP
+  handles the references natively.
 - A parameter typed in another case (`\psr\container\containerinterface`) now
   receives the current container like the declared spelling, instead of failing
   with an `UnresolvableParameterException`.

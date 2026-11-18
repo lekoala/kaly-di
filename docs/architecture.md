@@ -326,7 +326,10 @@ only ever throws PSR-11 exceptions. The same normalization applies to the type
 check of an alias id, which may autoload that id after the target has already
 been resolved: an autoloader that throws — or that looks up a missing entry of
 its own through the container — is wrapped in a `ContainerException` with the
-original error as `previous`, never reported as the alias being missing.
+original error as `previous`, never reported as the alias being missing. One
+exception to that rule: an error that already implements
+`ContainerExceptionInterface` keeps its type — it is already PSR-11-normalized,
+and wrapping it would only hide the concrete problem.
 
 ### Resolution failures leave no partial state for the failed service
 

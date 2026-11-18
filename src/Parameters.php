@@ -99,7 +99,13 @@ final class Parameters
         ?ContainerInterface $container = null,
     ): array {
         self::assertNoReferenceParameters($parameters);
-        [$provided, $variadicValues] = self::normalizeArguments($parameters, $arguments);
+        // Nothing to normalize or validate: skip the whole argument pass.
+        if ($arguments === []) {
+            $provided = [];
+            $variadicValues = [];
+        } else {
+            [$provided, $variadicValues] = self::normalizeArguments($parameters, $arguments);
+        }
 
         $resolved = [];
         $solid = [];

@@ -32,6 +32,13 @@ All notable changes to this project are documented in this file.
   receives the current container like the declared spelling, instead of failing
   with an `UnresolvableParameterException`.
 
+### Performance
+
+- `has()` returns immediately for an already cached instance; parameter
+  normalization is skipped when no arguments are provided; the configured
+  parameter check is skipped when a service has no configured parameters; and
+  `callbacksForClass()` returns early when no callbacks are registered.
+
 ### Documentation
 
 - Documented that `$callable` / `$class` are owned by the `Injector` signature: a

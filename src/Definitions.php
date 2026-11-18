@@ -641,6 +641,11 @@ final class Definitions
      */
     public function callbacksForClass(string $class): array
     {
+        // Nothing to look up: skip the hierarchy entirely.
+        if ($this->callbacks === []) {
+            return [];
+        }
+
         assert(class_exists($class));
 
         $hierarchy = ReflectionCache::classHierarchy($class);

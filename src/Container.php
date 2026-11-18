@@ -197,6 +197,12 @@ class Container implements ContainerInterface
      */
     public function has(string $id): bool
     {
+        // A cached instance implies availability. Definitions are locked after
+        // construction, so this fast path can never disagree with the checks
+        // below.
+        if (array_key_exists($id, $this->instances)) {
+            return true;
+        }
         // There is an explicit definition for it
         if ($this->definitions->has($id)) {
             return true;
@@ -326,7 +332,9 @@ class Container implements ContainerInterface
     {
         // Gather explicitly defined parameters for this class/id
         $configured = $this->definitions->allParametersFor($class, $id);
-        $this->assertKnownParameters($id, $class, $configured, $constructorParameters);
+        if ($configured !== []) {
+            $this->assertKnownParameters($id, $class, $configured, $constructorParameters);
+        }
 
         $arguments = [];
         foreach ($configured as $paramName => $paramValue) {

@@ -16,6 +16,8 @@ use ReflectionUnionType;
  * Helper class to deal with parameters resolution.
  *
  * See resolveParameters() for the resolution contract.
+ *
+ * @internal
  */
 final class Parameters
 {

@@ -489,8 +489,12 @@ whole graph.
 
 ## The Container Is Not Registered By Default
 
-No identifier is reserved and the container does not register itself. In particular,
-`Psr\Container\ContainerInterface` is not automatically available:
+No identifier is reserved and the container does not register itself, with one
+deliberate exception: `stdClass` cannot be used as a service id or an alias in any
+spelling. It names PHP's generic anonymous object, so such an entry could not be
+distinguished from an arbitrary object value.
+
+In particular, `Psr\Container\ContainerInterface` is not automatically available:
 
 ```php
 $container->has(ContainerInterface::class); // false

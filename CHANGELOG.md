@@ -50,6 +50,14 @@ All notable changes to this project are documented in this file.
 - Documented that `$callable` / `$class` are owned by the `Injector` signature: a
   target parameter with that name must be passed positionally. Documented the
   by-reference rejection.
+- Documented the `stdClass` exception to the "no reserved ids" rule, the order
+  and guarantees of the `Container::build()` / `configure()` extension hooks, and
+  that `Parameters` is internal.
+
+### Changed
+
+- Declare `provide: {"psr/container-implementation": "1.0.0"}` in `composer.json`,
+  so consumers can depend on the PSR-11 implementation virtual package.
 
 ## [0.4.1]
 

@@ -49,9 +49,32 @@ lifetime of that `Container` instance. See
 Application services should normally receive their dependencies directly rather than
 depend on the container itself.
 
-### No reserved ids, no self-registration
+### Extension hooks
 
-The container never registers itself and no identifier is reserved:
+`Container` subclasses may override `build(string $id): object` and
+`configure(object $instance, string $id): void`. For a service that is not
+cached yet, `get()` runs them in this order:
+
+1. `build()` creates the instance (definition, convention or autowiring).
+2. The class-id check verifies that the instance matches the requested id.
+3. `configure()` runs the registered callbacks.
+4. The fully built and configured instance is cached.
+
+An override must preserve these guarantees: return an object from `build()`, do
+not cache the instance before `configure()` ran, and keep Kaly exceptions
+unchanged (or reproduce the same normalization). Tests exercising the hooks live
+in `tests/ContainerExtensionTest.php`. The protected `$building` (cycle guard)
+and `$instances` (shared cache) arrays carry the container invariants; they are
+available to subclasses but are not part of the public runtime API.
+
+### No reserved ids (except `stdClass`), no self-registration
+
+The container never registers itself and no identifier is reserved, with one
+deliberate exception: `stdClass` is rejected as a service id or alias in any
+spelling (`stdclass`, `\stdClass`). It names PHP's generic anonymous object, so a
+`stdClass` entry could not be distinguished from an arbitrary object value;
+`Definitions` therefore refuses it instead of reserving surprising behavior.
+Every other id is ordinary, including `ContainerInterface`:
 
 ```php
 $container->has(ContainerInterface::class); // false

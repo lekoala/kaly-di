@@ -297,9 +297,10 @@ names and objects are already rejected at registration in development. To map an
 id to an unrelated class, use a custom id (`'app.logger'`).
 
 `NotFoundExceptionInterface` is only thrown for the requested id itself. When a
-factory, a parameter closure or a callback looks up a missing entry, the outer
-`get()` throws a `ContainerException` with the original exception as previous, so
-a PSR-11 consumer never mistakes it for a missing entry.
+factory, a parameter closure, a callback or the type check of an alias id looks
+up a missing entry, the outer `get()` throws a `ContainerException` with the
+original exception as previous, so a PSR-11 consumer never mistakes it for a
+missing entry.
 For concrete classes, `has()` reports whether the class itself is instantiable;
 constructor resolution may still fail when `get()` is called.
 
@@ -312,7 +313,9 @@ autoloader throwing), the error surfaces as-is. Inside `get()`, the same check
 is wrapped in a `ContainerException` (original error as `previous`), so `get()`
 only ever throws PSR-11 exceptions. The same normalization applies to the type
 check of an alias id, which may autoload that id after the target has already
-been resolved.
+been resolved: an autoloader that throws — or that looks up a missing entry of
+its own through the container — is wrapped in a `ContainerException` with the
+original error as `previous`, never reported as the alias being missing.
 
 ### Resolution failures leave no partial state for the failed service
 
@@ -345,11 +348,15 @@ Kaly DI separates two kinds of checks:
   regardless of assertion settings: locking, duplicate ids, `merge()` collisions,
   `rebind()` preconditions, and illegal factory results. They are already known and
   cheap to check.
-- **Invalid argument lists and values** passed to `Injector` or `Container`
-  (unknown named arguments, double assignments, surplus positionals, positional
-  after named, a value that does not match its parameter type, a by-reference
-  parameter) throw an `InvalidArgumentException` before anything is resolved,
-  regardless of assertion settings.
+- **Invalid arguments and unsupported signatures** are rejected regardless of
+  assertion settings. `Injector` throws an `InvalidArgumentException` before
+  resolving dependencies when argument names, positions or types are invalid,
+  or when the signature declares a by-reference parameter. `Container::get()`
+  throws a `DefinitionException` for unknown configured parameter names before
+  evaluating configured parameter closures. A service factory that returns the
+  class name has already run at that point. Type mismatches and by-reference
+  parameters are checked after the configured parameter closures run and reach
+  the caller as a `ContainerException` wrapping the `InvalidArgumentException`.
 - **Checks that may autoload or reflect code the runtime might never use** (class
   existence, binding compatibility) use PHP `assert()`. They give feedback during
   development (`zend.assertions = 1`) and cost nothing in production

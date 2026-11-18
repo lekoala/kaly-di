@@ -30,10 +30,10 @@ use Psr\Container\ContainerInterface;
  * configuration and resolving its real entry points exercises every visited
  * path. Kaly deliberately does not audit the whole graph ahead of time.
  *
- * Read API: has(), get(), getAliases(), parametersFor() and callbacksFor().
- * The raw storage accessors (getValues(), getSources(), getParameters(),
- * getCallbacks()) and expand() are internal plumbing used by merge() and the
- * Container; they are not part of the supported public API.
+ * Read API: has(), get(), getAliases(), parametersFor(), callbacksFor() and
+ * sourceFor(). The raw storage accessors (getValues(), getSources(),
+ * getParameters(), getCallbacks()) and expand() are internal plumbing used by
+ * merge() and the Container; they are not part of the supported public API.
  */
 final class Definitions
 {
@@ -599,18 +599,22 @@ final class Definitions
     }
 
     /**
-     * Retrieve parameters for a class and for the requested id (id wins)
+     * Retrieve parameters for a class, its binding target and the requested id
+     * (id wins)
      *
-     * @param class-string $class
+     * $target is the binding target as the definition wrote it. When it spells
+     * the concrete class differently (a class_alias() target, a case variant),
+     * parameters configured under that spelling still apply instead of silently
+     * falling back to the constructor default.
+     *
+     * @param class-string $class The declared name of the concrete class
+     * @param string $id The service id being built
+     * @param string|null $target The binding target as written, when it differs from $class
      * @return array<string,mixed>
      */
-    public function allParametersFor(string $class, string $id): array
+    public function allParametersFor(string $class, string $id, ?string $target = null): array
     {
-        $id = DefinitionGuard::normalizeId($id);
-        if ($class === $id) {
-            return $this->parameters[$class] ?? [];
-        }
-        return array_replace($this->parameters[$class] ?? [], $this->parameters[$id] ?? []);
+        return DefinitionGuard::mergeConfiguredParameters($this->parameters, $class, $id, $target);
     }
 
     /**

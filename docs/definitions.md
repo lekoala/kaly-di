@@ -319,8 +319,8 @@ $definitions->rebind(StorageInterface::class, InMemoryStorage::class, source: 'd
 
 `rebind()` keeps the initial source and records the replacement, so an error can
 read `declared by \`core\`; replaced by \`demo\``. Sources are read back with
-`sourceFor()` / `getSources()`, never trigger autoload or reflection, and have no
-effect on resolution.
+`sourceFor()`, never trigger autoload or reflection, and have no effect on
+resolution.
 
 ### Replacing a Definition
 

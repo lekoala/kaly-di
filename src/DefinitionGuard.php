@@ -7,7 +7,8 @@ namespace Kaly\Di;
 use Closure;
 
 /**
- * Configuration invariants and development assertions for Definitions.
+ * Configuration invariants, diagnostics and parameter-lookup helpers for
+ * Definitions.
  *
  * Kept out of Definitions so that class stays within the complexity and
  * method-count thresholds; this is an implementation detail.
@@ -54,6 +55,70 @@ final class DefinitionGuard
             $parts[] = "incoming from `{$incoming}`";
         }
         return $parts === [] ? '' : ' (' . implode('; ', $parts) . ')';
+    }
+
+    /**
+     * Human-readable owner of configured parameters for an error message, e.g.
+     * `Foo` or `Foo (id `bar`, target `FooAlias`)`: the class as declared,
+     * plus every other spelling the parameter lookup covered, so an error
+     * never points at an id the configuration does not mention.
+     */
+    public static function describeParameterOwner(string $class, string $id, ?string $target = null): string
+    {
+        $target = $target !== null ? self::normalizeId($target) : null;
+        if ($target === $class || $target === $id) {
+            $target = null;
+        }
+        $parts = [];
+        if ($id !== $class) {
+            $parts[] = "id `{$id}`";
+        }
+        if ($target !== null) {
+            $parts[] = "target `{$target}`";
+        }
+        return $parts === [] ? "`{$class}`" : "`{$class}` (" . implode(', ', $parts) . ')';
+    }
+
+    /**
+     * Merge configured parameters across every spelling the lookup covers.
+     *
+     * Keys are ordered least to most specific: the class as declared, the
+     * binding target as written (a class_alias() or case variant of the class
+     * keeps its own configuration), then the service id. A repeated key is
+     * kept at its most specific position, so the service id always wins. When
+     * nothing is configured at all, the key handling is skipped entirely: the
+     * hot resolution path stays free of it.
+     *
+     * @param array<string,array<string,mixed>> $parameters
+     * @return array<string,mixed>
+     */
+    public static function mergeConfiguredParameters(
+        array $parameters,
+        string $class,
+        string $id,
+        ?string $target = null,
+    ): array {
+        if ($parameters === []) {
+            return [];
+        }
+
+        $id = self::normalizeId($id);
+        $target = $target !== null ? self::normalizeId($target) : null;
+
+        $keys = [];
+        if ($class !== $target && $class !== $id) {
+            $keys[] = $class;
+        }
+        if ($target !== null && $target !== $id) {
+            $keys[] = $target;
+        }
+        $keys[] = $id;
+
+        $configured = [];
+        foreach ($keys as $key) {
+            $configured = array_replace($configured, $parameters[$key] ?? []);
+        }
+        return $configured;
     }
 
     /**

@@ -10,6 +10,11 @@ All notable changes to this project are documented in this file.
   declared name. A binding (`bind()`), a `set()` entry or a factory returning a
   class spelled with a leading backslash or a different case no longer silently
   falls back to the constructor default.
+- A definition whose target spells the concrete class differently — a
+  `class_alias()` target, a case variant of a short class name — no longer
+  silently drops parameters configured under that spelling. The parameter
+  lookup covers the declared class name, the binding target as written and the
+  service id, in that order of precedence.
 - `Container` and `Injector` calls no longer pass `null` for trailing optional
   parameters that PHP declares without an exposed default (e.g.
   `array_keys($data)`). The arguments are omitted like a direct call, while an
@@ -24,6 +29,11 @@ All notable changes to this project are documented in this file.
   autoloader throwing during the alias type check. `has()` and `get()` therefore
   keep their documented contracts, and the original error remains available as
   `previous`.
+- `get()` wraps a `NotFoundExceptionInterface` raised while resolving an alias —
+  for instance an autoloader looking up one of its own dependencies during the
+  type check — in a `ContainerException` with the original as `previous`. An
+  alias that `has()` reports as available is therefore never returned as
+  missing.
 - `Injector::invoke()` and `Injector::make()` reject callables/constructors with a
   by-reference parameter with an `InvalidArgumentException` before resolution.
   Reflection cannot preserve the caller's reference, so passing a value used to
@@ -54,8 +64,14 @@ All notable changes to this project are documented in this file.
   and guarantees of the `Container::build()` / `configure()` extension hooks, and
   that `Parameters` is internal.
 - Classified the `Definitions` read methods: `has()`, `get()`, `getAliases()`,
-  `parametersFor()` and `callbacksFor()` are the read API, while the raw storage
-  accessors and `expand()` are marked `@internal`.
+  `parametersFor()`, `callbacksFor()` and `sourceFor()` are the read API, while
+  the raw storage accessors and `expand()` are marked `@internal`.
+- Documented the argument validation timing through `Container::get()`: unknown
+  configured parameter names are rejected before configured parameter closures
+  run. Type mismatches and by-reference parameters are checked after those
+  closures run and surface as a `ContainerException` wrapping the
+  `InvalidArgumentException`. `Injector` rejects invalid arguments and
+  unsupported signatures before resolving dependencies.
 
 ### Changed
 

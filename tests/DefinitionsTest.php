@@ -208,6 +208,37 @@ class DefinitionsTest extends TestCase
         $this->assertSame('class', $same['shared']);
     }
 
+    /**
+     * A binding target may spell the concrete class differently
+     * (class_alias(), case variant): its configured parameters still apply.
+     * Precedence: the target spelling over the declared class name, and the
+     * service id over both.
+     */
+    public function testAllParametersForIncludesTheTargetSpelling(): void
+    {
+        $def = Definitions::create();
+        $def->parameter(TestObject::class, 'shared', 'declared');
+        $def->parameter('WorkerAlias', 'shared', 'target');
+        $def->parameter(TestInterface::class, 'shared', 'id');
+
+        // Target spelling over the declared class name
+        $byTarget = $def->allParametersFor(TestObject::class, 'custom', 'WorkerAlias');
+        $this->assertSame('target', $byTarget['shared']);
+
+        // Service id over the target spelling
+        $byId = $def->allParametersFor(TestObject::class, TestInterface::class, 'WorkerAlias');
+        $this->assertSame('id', $byId['shared']);
+
+        // A repeated key keeps its most specific position: the id wins even
+        // when it names the declared class
+        $declaredId = $def->allParametersFor(TestObject::class, TestObject::class, 'WorkerAlias');
+        $this->assertSame('declared', $declaredId['shared']);
+
+        // A target equal to the class or the id adds no lookup key
+        $same = $def->allParametersFor(TestObject::class, TestInterface::class, TestObject::class);
+        $this->assertSame('id', $same['shared']);
+    }
+
     public function testCallback(): void
     {
         $def = Definitions::create();

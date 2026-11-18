@@ -95,11 +95,19 @@ class Container implements ContainerInterface
         // but it must still honor its own id when that id names a class.
         // The type check can autoload the alias id: normalize its failures too,
         // so get() only ever throws PSR-11 exceptions. Already normalized
-        // exceptions (Kaly or third-party) keep their type.
+        // exceptions (Kaly or third-party) keep their type, except a
+        // NotFoundExceptionInterface: has($id) already passed, so a nested
+        // miss must not pose as this id being missing.
         if ($this->definitions->hasAlias($id)) {
             try {
                 $instance = $this->get((string) $this->definitions->getAlias($id));
                 $this->assertMatchesClassId($instance, $id);
+            } catch (NotFoundExceptionInterface $e) {
+                // PSR-11 reserves NotFound for the requested id itself. The
+                // miss comes from the nested resolution (the target, or an
+                // entry the type-check autoload looks up): report it as a
+                // container error, original as previous.
+                throw new ContainerException("Unable to create object `{$id}`: {$e->getMessage()}", 0, $e);
             } catch (ContainerExceptionInterface $e) {
                 throw $e;
             } catch (\Throwable $e) {
@@ -304,10 +312,12 @@ class Container implements ContainerInterface
 
         [$reflection, $constructorParameters] = ReflectionCache::reflection($class);
 
-        // Parameters are indexed by the name PHP declares, whatever spelling the
-        // definition used (`\Foo`, `FOO`). The requested id still wins for
-        // service-specific overrides.
-        $arguments = $this->resolveConstructorArguments($id, $reflection->getName(), $constructorParameters);
+        // Parameters are looked up under the declared class name, whatever
+        // spelling the definition used (`\Foo`, `FOO`), under the target as
+        // the definition wrote it (a `class_alias()` target keeps parameters
+        // configured under the alias), and under the requested id, which wins
+        // for service-specific overrides.
+        $arguments = $this->resolveConstructorArguments($id, $reflection->getName(), $constructorParameters, $class);
 
         // Wrap any exception in a ContainerException
         try {
@@ -326,16 +336,21 @@ class Container implements ContainerInterface
      *
      * @param string $id The service id being built
      * @param class-string $class The concrete class being instantiated
+     * @param string|null $target The binding target as the definition wrote it, when it differs from $class
      * @param \ReflectionParameter[] $constructorParameters
      * @return list<mixed>
      * @throws UnresolvableParameterException
      */
-    private function resolveConstructorArguments(string $id, string $class, array $constructorParameters): array
-    {
+    private function resolveConstructorArguments(
+        string $id,
+        string $class,
+        array $constructorParameters,
+        ?string $target = null,
+    ): array {
         // Gather explicitly defined parameters for this class/id
-        $configured = $this->definitions->allParametersFor($class, $id);
+        $configured = $this->definitions->allParametersFor($class, $id, $target);
         if ($configured !== []) {
-            $this->assertKnownParameters($id, $class, $configured, $constructorParameters);
+            $this->assertKnownParameters($id, $class, $configured, $constructorParameters, $target);
         }
 
         $arguments = [];
@@ -403,6 +418,7 @@ class Container implements ContainerInterface
      * @param class-string $class
      * @param array<string,mixed> $configured
      * @param \ReflectionParameter[] $constructorParameters
+     * @param string|null $target The binding target as written, shown in the error
      * @throws DefinitionException
      */
     private function assertKnownParameters(
@@ -410,6 +426,7 @@ class Container implements ContainerInterface
         string $class,
         array $configured,
         array $constructorParameters,
+        ?string $target = null,
     ): void {
         $available = array_values(array_map(
             static fn(\ReflectionParameter $p): string => $p->getName(),
@@ -422,10 +439,12 @@ class Container implements ContainerInterface
         }
 
         sort($unknown);
-        $target = $id === $class ? "`{$class}`" : "`{$class}` (id `{$id}`)";
+        // List every spelling the lookup covered, so an error never points at
+        // an id the configuration does not mention.
+        $described = DefinitionGuard::describeParameterOwner($class, $id, $target);
         throw new DefinitionException(sprintf(
             'Unknown configured parameter(s) for %s: %s. Available: %s.',
-            $target,
+            $described,
             self::quoteList($unknown),
             self::quoteList($available),
         ));

@@ -8,6 +8,7 @@ use Kaly\Di\AliasValidator;
 use Kaly\Di\ContainerException;
 use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
+use Kaly\Di\ReferenceNotFoundException;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObject2;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -129,6 +130,41 @@ class AliasTest extends TestCase
             } catch (ContainerException $e) {
                 $this->assertSame($failure, $e->getPrevious());
                 $this->assertStringContainsString('`alias`', $e->getMessage());
+            }
+        } finally {
+            spl_autoload_unregister($autoloader);
+        }
+    }
+
+    /**
+     * An autoloader may resolve its own dependencies through the container.
+     * When the alias type check triggers it, a missing entry must surface as
+     * a ContainerException, never as a NotFoundExceptionInterface: has()
+     * already reported the alias as available, and PSR-11 reserves NotFound
+     * for the requested id itself.
+     */
+    public function testAliasTypeCheckWrapsANestedNotFound(): void
+    {
+        $container = Definitions::create()
+            ->set('target', new TestObject())
+            ->alias('review_alias', 'target')
+            ->createContainer();
+        $autoloader = static function (string $class) use ($container): void {
+            if ($class === 'review_alias') {
+                $container->get('missing_dependency');
+            }
+        };
+        spl_autoload_register($autoloader);
+
+        try {
+            $this->assertTrue($container->has('review_alias'));
+            try {
+                $container->get('review_alias');
+                $this->fail('Expected a ContainerException');
+            } catch (ContainerException $e) {
+                $this->assertStringContainsString('`review_alias`', $e->getMessage());
+                $this->assertInstanceOf(ReferenceNotFoundException::class, $e->getPrevious());
+                $this->assertStringContainsString('`missing_dependency`', $e->getPrevious()->getMessage());
             }
         } finally {
             spl_autoload_unregister($autoloader);

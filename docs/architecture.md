@@ -322,13 +322,14 @@ Kaly DI separates two kinds of checks:
   regardless of assertion settings: locking, duplicate ids, `merge()` collisions,
   `rebind()` preconditions, and illegal factory results. They are already known and
   cheap to check.
-- **Invalid argument lists** passed to `Injector` (unknown named arguments,
-  double assignments, surplus positionals, positional after named) throw an
-  `InvalidArgumentException` before anything is resolved, regardless of assertion
-  settings.
+- **Invalid argument lists and values** passed to `Injector` or `Container`
+  (unknown named arguments, double assignments, surplus positionals, positional
+  after named, a value that does not match its parameter type, a by-reference
+  parameter) throw an `InvalidArgumentException` before anything is resolved,
+  regardless of assertion settings.
 - **Checks that may autoload or reflect code the runtime might never use** (class
-  existence, binding compatibility, argument types) use PHP `assert()`. They give
-  feedback during development (`zend.assertions = 1`) and cost nothing in production
+  existence, binding compatibility) use PHP `assert()`. They give feedback during
+  development (`zend.assertions = 1`) and cost nothing in production
   (`zend.assertions = -1`), so production never visits services it does not use.
 
 A missing id still throws a `ReferenceNotFoundException` at resolution time.

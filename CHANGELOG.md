@@ -24,6 +24,19 @@ All notable changes to this project are documented in this file.
   autoloader throwing during the alias type check. `has()` and `get()` therefore
   keep their documented contracts, and the original error remains available as
   `previous`.
+- `Injector::invoke()` and `Injector::make()` reject callables/constructors with a
+  by-reference parameter with an `InvalidArgumentException` before resolution.
+  Reflection cannot preserve the caller's reference, so passing a value used to
+  emit a warning and leave the caller's variable unchanged.
+- A parameter typed in another case (`\psr\container\containerinterface`) now
+  receives the current container like the declared spelling, instead of failing
+  with an `UnresolvableParameterException`.
+
+### Documentation
+
+- Documented that `$callable` / `$class` are owned by the `Injector` signature: a
+  target parameter with that name must be passed positionally. Documented the
+  by-reference rejection.
 
 ## [0.4.1]
 

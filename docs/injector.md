@@ -176,6 +176,34 @@ $result = $injector->invoke($concat, ...['value1', 'value2']);
 > resolve missing object dependencies. If you need the container's shared instance,
 > use `$container->get()` instead.
 
+## Parameter Names Owned by the Injector
+
+`invoke()` and `make()` declare their first parameter (`$callable` / `$class`) and
+a variadic `$arguments`. A named argument with one of those first names is
+consumed by the injector signature before argument resolution, which PHP rejects
+as a double assignment:
+
+```php
+// Both fail before the injector sees the argument:
+$injector->make(HasClassParameter::class, class: 'value');
+$injector->invoke($fn, callable: 'value');
+```
+
+Pass those target parameters positionally when needed:
+
+```php
+$injector->make(HasClassParameter::class, 'value');
+$injector->invoke($fn, 'value');
+```
+
+## By-Reference Parameters Are Rejected
+
+Reflection-based invocation unpacks an argument array by value, so it cannot
+preserve the caller's reference. A callable or constructor with a by-reference
+parameter is rejected with an `InvalidArgumentException` before anything is
+resolved, rather than emitting a warning and leaving the caller's variable
+unchanged.
+
 ## Argument Validation
 
 Arguments may be positional, named, or a mix of both: a positional prefix followed

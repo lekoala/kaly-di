@@ -98,6 +98,7 @@ final class Parameters
         array $arguments,
         ?ContainerInterface $container = null,
     ): array {
+        self::assertNoReferenceParameters($parameters);
         [$provided, $variadicValues] = self::normalizeArguments($parameters, $arguments);
 
         $resolved = [];
@@ -188,6 +189,35 @@ final class Parameters
     private static function omittedMarker(): \stdClass
     {
         return self::$omittedMarker ??= new \stdClass();
+    }
+
+    /**
+     * Reflection invocation cannot preserve the caller's references: an array
+     * of arguments is unpacked by value, so a by-reference parameter would
+     * emit a warning and leave the caller's variable untouched. Reject those
+     * signatures up front instead of returning a misleading result.
+     *
+     * @param \ReflectionParameter[] $parameters
+     * @throws InvalidArgumentException
+     */
+    private static function assertNoReferenceParameters(array $parameters): void
+    {
+        $references = [];
+        foreach ($parameters as $parameter) {
+            if ($parameter->isPassedByReference()) {
+                $references[] = '$' . $parameter->getName();
+            }
+        }
+        if ($references === []) {
+            return;
+        }
+
+        sort($references);
+        throw new InvalidArgumentException(
+            'Parameters passed by reference are not supported: '
+            . implode(', ', $references)
+            . '. The injector cannot preserve the caller\'s references.',
+        );
     }
 
     /**
@@ -455,11 +485,12 @@ final class Parameters
             $name = TypeMatcher::className($type, $parameter->getDeclaringClass());
             if ($container->has($name)) {
                 $candidates[$name] = false;
-            } elseif ($name === ContainerInterface::class) {
+            } elseif (strcasecmp($name, ContainerInterface::class) === 0) {
                 // The resolver can always provide itself to a parameter typed
-                // exactly `ContainerInterface`. This is a resolver capability,
-                // not a container entry: has(ContainerInterface::class) stays
-                // false. An explicit definition, checked above, always wins.
+                // `ContainerInterface`, whatever the case it was written in
+                // (PHP class names are case-insensitive). This is a resolver
+                // capability, not a container entry: has(ContainerInterface::class)
+                // stays false. An explicit definition, checked above, always wins.
                 $candidates[$name] = true;
             }
         }

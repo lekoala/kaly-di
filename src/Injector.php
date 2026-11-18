@@ -36,9 +36,14 @@ final class Injector
      * Invoke any callable and resolve object dependencies using the container.
      * You can pass named arguments or positional arguments with ...$arguments
      *
+     * `$callable` and `$arguments` are this signature's own parameter names: a
+     * target parameter with the same name must be passed positionally.
+     *
      * @param callable $callable
      * @param mixed ...$arguments
      * @return mixed
+     * @throws InvalidArgumentException When the arguments are invalid or the
+     * callable has a by-reference parameter
      */
     public function invoke(callable $callable, ...$arguments)
     {
@@ -73,10 +78,15 @@ final class Injector
      * other argument must be provided explicitly, have a default value or be
      * nullable. An interface or abstract class cannot be built.
      *
+     * `$class` and `$arguments` are this signature's own parameter names: a
+     * constructor parameter with the same name must be passed positionally.
+     *
      * @template T of object
      * @param class-string<T> $class
      * @param mixed ...$arguments
      * @return T
+     * @throws InvalidArgumentException When the class or arguments are invalid,
+     * or the constructor has a by-reference parameter
      */
     public function make(string $class, ...$arguments)
     {

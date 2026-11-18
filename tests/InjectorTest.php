@@ -16,6 +16,7 @@ use Kaly\Tests\Mocks\TestObject5;
 use Kaly\Tests\Mocks\TestObject5Parent;
 use Kaly\Tests\Mocks\TestObject6;
 use Kaly\Tests\Mocks\TestObjectB;
+use Kaly\Tests\Mocks\TestReferenceParameter;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
@@ -235,6 +236,53 @@ class InjectorTest extends TestCase
 
         // A later argument forces the omitted one to be materialized as null.
         $this->assertSame(array_keys($data, null, true), $injector->invoke('array_keys', $data, strict: true));
+    }
+
+    /**
+     * Reflection invocation cannot preserve caller references. Rejecting the
+     * signature is explicit; passing a value would emit a warning and leave
+     * the caller's variable untouched.
+     */
+    public function testInvokeRejectsByReferenceParameters(): void
+    {
+        $injector = new Injector(new Container());
+        $n = 1;
+        $callable = static function (int &$n): int {
+            return ++$n;
+        };
+
+        try {
+            $injector->invoke($callable, $n);
+            $this->fail('Expected a by-reference rejection');
+        } catch (InvalidArgumentException $e) {
+            $this->assertStringContainsString('$n', $e->getMessage());
+            $this->assertStringContainsString('reference', $e->getMessage());
+        }
+
+        $this->assertSame(1, $n);
+    }
+
+    public function testMakeRejectsByReferenceConstructorParameters(): void
+    {
+        $injector = new Injector(new Container());
+        $n = 1;
+
+        $this->expectException(InvalidArgumentException::class);
+        $injector->make(TestReferenceParameter::class, $n);
+    }
+
+    /**
+     * PHP class names are case-insensitive: the resolver capability must not
+     * depend on how the type was written in the callable signature.
+     */
+    public function testContainerInterfaceTypeIsCaseInsensitive(): void
+    {
+        $container = new Container();
+        $injector = new Injector($container);
+
+        $callable = static fn(\psr\container\containerinterface $c): object => $c;
+
+        $this->assertSame($container, $injector->invoke($callable));
     }
 
     public function testInjectorMixedPositionalAndNamedArguments(): void

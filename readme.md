@@ -139,8 +139,11 @@ Kaly DI puts each check where its cost is reasonable:
   same id twice, a `merge()` collision, rebinding an unknown id, a `rebind()`
   precondition mismatch, or a factory returning an illegal value once it has run.
   These facts are already known and cheap to check.
+- **Invalid argument lists and values** always throw an `InvalidArgumentException`:
+  unknown named arguments, double assignments, surplus positionals, positional after
+  named, a value that does not match its parameter type, or a by-reference parameter.
 - **Checks that may autoload or reflect code the runtime might never use** (class
-  existence, binding compatibility, argument types) use PHP `assert()`. They run in
+  existence, binding compatibility) use PHP `assert()`. They run in
   development (`zend.assertions = 1`) and are disabled in production
   (`zend.assertions = -1`), so production never visits services it does not use.
 - **The composition is validated by its tests.** There is no ahead-of-time graph

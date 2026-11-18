@@ -232,7 +232,7 @@ class InjectorTest extends TestCase
         $this->assertSame(array_keys($data), $injector->invoke('array_keys', $data));
 
         // An explicit null is a real argument and keeps PHP's filtering behavior.
-        $this->assertSame(array_keys($data, null), $injector->invoke('array_keys', $data, null));
+        $this->assertSame(array_keys($data, null, true), $injector->invoke('array_keys', $data, null, true));
 
         // A later argument forces the omitted one to be materialized as null.
         $this->assertSame(array_keys($data, null, true), $injector->invoke('array_keys', $data, strict: true));

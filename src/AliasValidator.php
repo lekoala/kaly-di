@@ -82,7 +82,7 @@ final class AliasValidator
         $validated = [];
         foreach (array_keys($aliases) as $start) {
             $start = (string) $start;
-            if (isset($validated[$start])) {
+            if (array_key_exists($start, $validated)) {
                 continue;
             }
 
@@ -92,10 +92,10 @@ final class AliasValidator
             $inPath = [];
             $current = $start;
             while (array_key_exists($current, $aliases)) {
-                if (isset($inPath[$current])) {
+                if (array_key_exists($current, $inPath)) {
                     throw new DefinitionException("Alias `{$start}` creates an alias cycle.");
                 }
-                if (isset($validated[$current])) {
+                if (array_key_exists($current, $validated)) {
                     break;
                 }
                 $inPath[$current] = true;

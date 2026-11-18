@@ -23,11 +23,14 @@ try {
 }
 
 $injector = new Injector(new Container());
+$rejected = false;
 try {
     $injector->invoke(static fn(bool $enabled): bool => $enabled, 'false');
-    $failures[] = 'Injector::invoke() accepted a string for a bool parameter';
 } catch (InvalidArgumentException) {
-    // expected
+    $rejected = true;
+}
+if (!$rejected) {
+    $failures[] = 'Injector::invoke() accepted a string for a bool parameter';
 }
 
 if ($failures !== []) {

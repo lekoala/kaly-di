@@ -20,6 +20,13 @@ use ReflectionUnionType;
 final class Parameters
 {
     /**
+     * Sentinel returned for an optional parameter that PHP declares without an
+     * exposed default value (many internal functions). Such an argument must
+     * be omitted rather than filled with null.
+     */
+    private static ?\stdClass $omittedMarker = null;
+
+    /**
      * @param ReflectionParameter $param
      * @return array<ReflectionNamedType|ReflectionIntersectionType>
      */
@@ -93,25 +100,93 @@ final class Parameters
         [$provided, $variadicValues] = self::normalizeArguments($parameters, $arguments);
 
         $resolved = [];
+        $solid = [];
+        $omitted = [];
         foreach ($parameters as $parameter) {
             $paramName = $parameter->getName();
 
             if ($parameter->isVariadic()) {
                 foreach ($variadicValues as $variadicValue) {
                     $resolved[] = $variadicValue;
+                    $solid[] = true;
                 }
                 break;
             }
 
             if (array_key_exists($paramName, $provided)) {
                 $resolved[] = $provided[$paramName];
+                $solid[] = true;
                 continue;
             }
 
-            $resolved[] = self::resolveSingleParameter($parameter, $container);
+            [$value, $isSolid] = self::resolveSingleParameter($parameter, $container);
+            if ($value === self::omittedMarker()) {
+                $omitted[count($resolved)] = $parameter;
+            }
+            $resolved[] = $value;
+            $solid[] = $isSolid;
         }
 
-        return $resolved;
+        return self::finalizeArguments($resolved, $solid, $omitted);
+    }
+
+    /**
+     * Preserve the omission of trailing optional arguments.
+     *
+     * PHP exposes some optional parameters without a default value (notably in
+     * internal functions: `array_keys($array, $filter_value = ..., $strict =
+     * false)`). Passing null there changes the call. A trailing run of such
+     * arguments, including the optional arguments that follow them, is
+     * therefore dropped. An omitted argument that is followed by a provided or
+     * container-resolved value is materialized as null when the signature
+     * allows it.
+     *
+     * @param list<mixed> $resolved
+     * @param list<bool> $solid Whether each value is provided or resolved (not a reflection fallback)
+     * @param array<int,\ReflectionParameter> $omitted
+     * @return list<mixed>
+     */
+    private static function finalizeArguments(array $resolved, array $solid, array $omitted): array
+    {
+        if ($omitted === []) {
+            return $resolved;
+        }
+
+        // An explicitly provided or container-resolved value cannot be omitted.
+        $lastSolid = -1;
+        foreach ($solid as $index => $isSolid) {
+            if ($isSolid) {
+                $lastSolid = $index;
+            }
+        }
+
+        // Drop the optional tail that follows the last resolved value.
+        $tailStart = null;
+        foreach (array_keys($omitted) as $index) {
+            if ($index > $lastSolid) {
+                $tailStart = $index;
+                break;
+            }
+        }
+        if ($tailStart !== null) {
+            $resolved = array_slice($resolved, 0, $tailStart);
+            $omitted = array_filter($omitted, static fn(int $index): bool => $index < $tailStart, ARRAY_FILTER_USE_KEY);
+        }
+
+        foreach ($omitted as $index => $parameter) {
+            if ($parameter->allowsNull()) {
+                $resolved[$index] = null;
+                continue;
+            }
+            throw self::unresolvable($parameter);
+        }
+
+        return array_values($resolved);
+    }
+
+    private static function omittedMarker(): \stdClass
+    {
+        return self::$omittedMarker ??= new \stdClass();
     }
 
     /**
@@ -273,10 +348,14 @@ final class Parameters
         return array_values($value);
     }
 
+    /**
+     * @return array{0: mixed, 1: bool} The value, and whether it is a real
+     * value rather than a reflection fallback (default or null).
+     */
     private static function resolveSingleParameter(
         ReflectionParameter $parameter,
         ?ContainerInterface $container,
-    ): mixed {
+    ): array {
         if ($container !== null) {
             $candidates = self::candidates($parameter, $container);
 
@@ -302,21 +381,32 @@ final class Parameters
                 // a container entry. An explicit definition was treated as a
                 // regular candidate above and wins naturally.
                 if ($candidates[$name]) {
-                    return $container;
+                    return [$container, true];
                 }
-                return self::fromContainer($parameter, $name, $container);
+                return [self::fromContainer($parameter, $name, $container), true];
             }
         }
 
         if ($parameter->isDefaultValueAvailable()) {
-            return $parameter->getDefaultValue();
+            return [$parameter->getDefaultValue(), false];
+        }
+
+        // PHP exposes some optional parameters without a default value:
+        // omitting them (when possible) is the only faithful call.
+        if ($parameter->isOptional()) {
+            return [self::omittedMarker(), false];
         }
 
         if ($parameter->allowsNull()) {
-            return null;
+            return [null, false];
         }
 
-        throw new UnresolvableParameterException(
+        throw self::unresolvable($parameter);
+    }
+
+    private static function unresolvable(ReflectionParameter $parameter): UnresolvableParameterException
+    {
+        return new UnresolvableParameterException(
             sprintf(
                 'Cannot resolve required parameter #%d ($%s) of type %s.',
                 $parameter->getPosition(),

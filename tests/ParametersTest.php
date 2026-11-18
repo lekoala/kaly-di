@@ -363,6 +363,35 @@ class ParametersTest extends TestCase
         $this->assertSame('', $stderr);
     }
 
+    /**
+     * array_keys() declares $filter_value as optional but exposes no default
+     * value through reflection: passing null would change the call, so a
+     * trailing optional argument without a default must be omitted.
+     */
+    public function testResolveParametersOmitsTrailingOptionalArgumentsWithoutDefaults(): void
+    {
+        $parameters = (new ReflectionFunction('array_keys'))->getParameters();
+        $data = ['x' => 17, 'y' => null];
+
+        $this->assertSame([$data], Parameters::resolveParameters($parameters, [$data]));
+    }
+
+    public function testResolveParametersKeepsAnExplicitNullForAnOptionalArgument(): void
+    {
+        $parameters = (new ReflectionFunction('array_keys'))->getParameters();
+        $data = ['x' => 17, 'y' => null];
+
+        $this->assertSame([$data, null, false], Parameters::resolveParameters($parameters, [$data, null]));
+    }
+
+    public function testResolveParametersMaterializesAnOmittedArgumentBeforeALaterValue(): void
+    {
+        $parameters = (new ReflectionFunction('array_keys'))->getParameters();
+        $data = ['x' => 17, 'y' => null];
+
+        $this->assertSame([$data, null, true], Parameters::resolveParameters($parameters, [$data, 'strict' => true]));
+    }
+
     public function testResolveParametersMissingRequiredThrows(): void
     {
         $reflection = new ReflectionClass(ReflTestMock::class);

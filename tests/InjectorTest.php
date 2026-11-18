@@ -221,6 +221,25 @@ class InjectorTest extends TestCase
         $injector->invoke($fn, a: true);
     }
 
+    /**
+     * Internal PHP functions can declare optional arguments without an exposed
+     * default. The injector must omit them instead of passing null, so the
+     * result is the same as a direct call.
+     */
+    public function testInvokePreservesPhpOptionalArgumentSemantics(): void
+    {
+        $injector = new Injector(new Container());
+        $data = ['x' => 17, 'y' => null];
+
+        $this->assertSame(array_keys($data), $injector->invoke('array_keys', $data));
+
+        // An explicit null is a real argument and keeps PHP's filtering behavior.
+        $this->assertSame(array_keys($data, null), $injector->invoke('array_keys', $data, null));
+
+        // A later argument forces the omitted one to be materialized as null.
+        $this->assertSame(array_keys($data, null, true), $injector->invoke('array_keys', $data, strict: true));
+    }
+
     public function testInjectorMixedPositionalAndNamedArguments(): void
     {
         $injector = new Injector(new Container());

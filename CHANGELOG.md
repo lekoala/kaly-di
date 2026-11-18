@@ -10,6 +10,10 @@ All notable changes to this project are documented in this file.
   declared name. A binding (`bind()`), a `set()` entry or a factory returning a
   class spelled with a leading backslash or a different case no longer silently
   falls back to the constructor default.
+- `Container` and `Injector` calls no longer pass `null` for trailing optional
+  parameters that PHP declares without an exposed default (e.g.
+  `array_keys($data)`). The arguments are omitted like a direct call, while an
+  explicitly provided `null` is preserved.
 
 ## [0.4.1]
 

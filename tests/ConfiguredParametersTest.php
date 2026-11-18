@@ -11,6 +11,8 @@ use Kaly\Tests\Mocks\TestNestedLeaf;
 use Kaly\Tests\Mocks\TestNestedMiddle;
 use Kaly\Tests\Mocks\TestNestedRoot;
 use Kaly\Tests\Mocks\TestObject5;
+use Kaly\Tests\Mocks\TestQueueJob;
+use Kaly\Tests\Mocks\TestQueueWorker;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
@@ -68,6 +70,50 @@ class ConfiguredParametersTest extends TestCase
             $this->assertSame($path, $e->getResolutionPath());
             $this->assertStringContainsString('Path: ' . $path, $e->getMessage());
         }
+    }
+
+    /**
+     * A definition may spell the concrete class with a leading backslash or a
+     * different case. PHP still resolves the class, but configured parameters
+     * are indexed by its declared name: losing it would silently fall back to
+     * the constructor default.
+     */
+    public function testBindingKeepsTheConcreteClassConfiguration(): void
+    {
+        $definitions = Definitions::create()
+            ->parameter(TestQueueWorker::class, 'queue', 'priority')
+            ->bind(TestQueueJob::class, '\\' . TestQueueWorker::class);
+
+        $this->assertSame('priority', $definitions->createContainer()->get(TestQueueJob::class)->queue);
+    }
+
+    public function testBindingKeepsTheConfigurationWithACaseVariant(): void
+    {
+        $definitions = Definitions::create()
+            ->parameter(TestQueueWorker::class, 'queue', 'priority')
+            ->bind(TestQueueJob::class, strtolower(TestQueueWorker::class));
+
+        $this->assertSame('priority', $definitions->createContainer()->get(TestQueueJob::class)->queue);
+    }
+
+    public function testSetKeepsTheConcreteClassConfiguration(): void
+    {
+        $definitions = Definitions::create()->parameter(TestQueueWorker::class, 'queue', 'priority')->set(
+            'worker',
+            '\\' . TestQueueWorker::class,
+        );
+
+        $this->assertSame('priority', $definitions->createContainer()->get('worker')->queue);
+    }
+
+    public function testFactoryReturningAClassKeepsTheConcreteClassConfiguration(): void
+    {
+        $definitions = Definitions::create()->parameter(TestQueueWorker::class, 'queue', 'priority')->set(
+            'worker',
+            static fn(): string => '\\' . TestQueueWorker::class,
+        );
+
+        $this->assertSame('priority', $definitions->createContainer()->get('worker')->queue);
     }
 
     /** @return array<string,array{string}> */

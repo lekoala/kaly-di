@@ -285,7 +285,10 @@ class Container implements ContainerInterface
 
         [$reflection, $constructorParameters] = ReflectionCache::reflection($class);
 
-        $arguments = $this->resolveConstructorArguments($id, $class, $constructorParameters);
+        // Parameters are indexed by the name PHP declares, whatever spelling the
+        // definition used (`\Foo`, `FOO`). The requested id still wins for
+        // service-specific overrides.
+        $arguments = $this->resolveConstructorArguments($id, $reflection->getName(), $constructorParameters);
 
         // Wrap any exception in a ContainerException
         try {

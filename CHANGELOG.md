@@ -2,6 +2,15 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Configured parameters of a concrete class are now resolved against its
+  declared name. A binding (`bind()`), a `set()` entry or a factory returning a
+  class spelled with a leading backslash or a different case no longer silently
+  falls back to the constructor default.
+
 ## [0.4.1]
 
 ### Fixed

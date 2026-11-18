@@ -4,17 +4,18 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
-use AssertionError;
 use InvalidArgumentException;
 use Kaly\Di\Container;
+use Kaly\Di\ContainerException;
+use Kaly\Di\Definitions;
 use Kaly\Di\Parameters;
 use Kaly\Di\TypeMatcher;
 use Kaly\Di\UnresolvableParameterException;
 use Kaly\Tests\Mocks\ReflTestMock;
 use Kaly\Tests\Mocks\ReflTestMockObject;
+use Kaly\Tests\Mocks\TestBooleanFlag;
 use PDO;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 use ReflectionClass;
@@ -35,13 +36,12 @@ class ParametersTest extends TestCase
         ];
     }
 
-    #[RequiresSetting('zend.assertions', '1')]
     #[DataProvider('invalidVariadicValues')]
     public function testEveryVariadicValueIsTypeChecked(array $arguments): void
     {
         $parameters = (new ReflectionFunction(fn(string ...$names): array => $names))->getParameters();
 
-        $this->expectException(AssertionError::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("parameter `names` doesn't support int");
         Parameters::resolveParameters($parameters, $arguments);
     }
@@ -218,15 +218,14 @@ class ParametersTest extends TestCase
         $this->assertSame(['test', 123, true, [], 0, false, null, null], $resolved);
     }
 
-    #[RequiresSetting('zend.assertions', '1')]
     public function testResolveParametersTooManyPositionalArgumentsThrows(): void
     {
         $reflection = new ReflectionClass(ReflTestMock::class);
         $method = $reflection->getMethod('methodWithManyParams');
         $parameters = $method->getParameters();
 
-        // Fourth positional argument lands on the array param => AssertionError
-        $this->expectException(AssertionError::class);
+        // Fourth positional argument lands on the array param => type error
+        $this->expectException(InvalidArgumentException::class);
         Parameters::resolveParameters($parameters, ['test', 123, true, 'extra']);
     }
 
@@ -390,6 +389,44 @@ class ParametersTest extends TestCase
         $data = ['x' => 17, 'y' => null];
 
         $this->assertSame([$data, null, true], Parameters::resolveParameters($parameters, [$data, 'strict' => true]));
+    }
+
+    /**
+     * Reflection coerces `'false'` to true for a bool parameter when
+     * assertions are disabled. Explicit values must match the declared type in
+     * every assertion mode.
+     */
+    public function testInvalidScalarConfigurationIsRejectedInProduction(): void
+    {
+        $process = proc_open(
+            [PHP_BINARY, '-d', 'zend.assertions=-1', __DIR__ . '/fixtures/typed_arguments_assertions_disabled.php'],
+            [0 => ['pipe', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+            $pipes,
+        );
+        $this->assertIsResource($process);
+        fclose($pipes[0]);
+        $stdout = stream_get_contents($pipes[1]);
+        $stderr = stream_get_contents($pipes[2]);
+        fclose($pipes[1]);
+        fclose($pipes[2]);
+        $exitCode = proc_close($process);
+
+        $this->assertSame(0, $exitCode, (string) $stderr);
+        $this->assertSame("ok\n", $stdout);
+        $this->assertSame('', $stderr);
+    }
+
+    public function testConfiguredScalarMustMatchTheDeclaredType(): void
+    {
+        $definitions = Definitions::create()->parameter(TestBooleanFlag::class, 'enabled', 'false');
+        $container = $definitions->createContainer();
+
+        try {
+            $container->get(TestBooleanFlag::class);
+            $this->fail('Expected the invalid scalar to be rejected');
+        } catch (ContainerException $e) {
+            $this->assertInstanceOf(InvalidArgumentException::class, $e->getPrevious());
+        }
     }
 
     public function testResolveParametersMissingRequiredThrows(): void

@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
-use AssertionError;
 use InvalidArgumentException;
 use Kaly\Di\Container;
 use Kaly\Di\Definitions;
@@ -17,7 +16,6 @@ use Kaly\Tests\Mocks\TestObject5;
 use Kaly\Tests\Mocks\TestObject5Parent;
 use Kaly\Tests\Mocks\TestObject6;
 use Kaly\Tests\Mocks\TestObjectB;
-use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 use Psr\Container\ContainerInterface;
 
@@ -169,7 +167,6 @@ class InjectorTest extends TestCase
         }
     }
 
-    #[RequiresSetting('zend.assertions', '1')]
     public function testInjectorArgumentPassing(): void
     {
         $injector = new Injector(new Container());
@@ -215,9 +212,9 @@ class InjectorTest extends TestCase
         $demo = new TestObject6('test', 'test', []);
         $this->assertEquals($demo, $injector->invoke($fn, $demo));
 
-        // provide an invalid value throws AssertionError
+        // provide an invalid value throws, whatever the assertion mode
         $fn = fn(string $a): string => $a;
-        $this->expectException(AssertionError::class);
+        $this->expectException(InvalidArgumentException::class);
         $injector->invoke($fn, a: true);
     }
 

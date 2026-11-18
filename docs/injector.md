@@ -192,7 +192,9 @@ Before anything is resolved, the argument list is validated and an
 - unknown named arguments,
 - the same parameter provided positionally and by name (variadic included),
 - surplus positional arguments when the callable has no variadic parameter,
-- a positional argument following a named one.
+- a positional argument following a named one,
+- a value that does not match the declared parameter type (no scalar coercion,
+  with or without `zend.assertions`).
 
 Validation runs before any dependency is resolved, so a rejected call has no side
 effects.

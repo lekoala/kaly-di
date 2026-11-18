@@ -14,6 +14,12 @@ All notable changes to this project are documented in this file.
   parameters that PHP declares without an exposed default (e.g.
   `array_keys($data)`). The arguments are omitted like a direct call, while an
   explicitly provided `null` is preserved.
+- Explicit arguments and configured constructor parameters now have to match
+  their declared type even when `zend.assertions=-1`. Previously only a
+  development assertion caught the mismatch and Reflection could coerce it in
+  production (`'false'` for a `bool` parameter became `true`). The rejection is
+  an `InvalidArgumentException`, wrapped in a `ContainerException` by
+  `Container::get()`.
 
 ## [0.4.1]
 

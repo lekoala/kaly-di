@@ -59,8 +59,9 @@ final class Parameters
      *
      * Provided arguments are normalized and validated before any dependency is
      * resolved: unknown named arguments, surplus positional arguments, double
-     * assignments (the same parameter passed positionally and by name) and the
-     * shape of a named variadic all throw an InvalidArgumentException up front.
+     * assignments (the same parameter passed positionally and by name), the
+     * shape of a named variadic and a value that does not match the declared
+     * parameter type all throw an InvalidArgumentException up front.
      * A typo therefore cannot surface as a misleading
      * UnresolvableParameterException or trigger a factory unnecessarily. These
      * checks are unconditional: they also hold with zend.assertions=-1.
@@ -224,7 +225,6 @@ final class Parameters
         $variadicValues = [];
         foreach ($parameters as $parameter) {
             $position = $parameter->getPosition();
-            $paramType = $parameter->getType();
             $paramName = $parameter->getName();
 
             if ($parameter->isVariadic()) {
@@ -237,10 +237,7 @@ final class Parameters
                     ? self::namedVariadicValue($paramName, $named[$paramName])
                     : array_slice($positional, $position);
                 foreach ($variadicValues as $value) {
-                    assert(
-                        TypeMatcher::matches($value, $paramType, $parameter->getDeclaringClass()),
-                        "parameter `{$paramName}` doesn't support " . get_debug_type($value),
-                    );
+                    self::assertValueMatchesParameter($parameter, $value);
                 }
                 continue;
             }
@@ -260,14 +257,33 @@ final class Parameters
                 continue;
             }
 
-            assert(
-                TypeMatcher::matches($value, $paramType, $parameter->getDeclaringClass()),
-                "parameter `{$paramName}` doesn't support " . get_debug_type($value),
-            );
+            self::assertValueMatchesParameter($parameter, $value);
             $provided[$paramName] = $value;
         }
 
         return [$provided, $variadicValues];
+    }
+
+    /**
+     * Explicit arguments must match the declared parameter type, whatever
+     * `zend.assertions` says. Reflection would otherwise coerce scalars in
+     * production (`'false'` becoming `true` for a `bool` parameter), making
+     * the value depend on the assertion mode.
+     *
+     * @throws InvalidArgumentException
+     */
+    private static function assertValueMatchesParameter(ReflectionParameter $parameter, mixed $value): void
+    {
+        if (TypeMatcher::matches($value, $parameter->getType(), $parameter->getDeclaringClass())) {
+            return;
+        }
+
+        throw new InvalidArgumentException(sprintf(
+            "parameter `%s` doesn't support %s (declared type: %s).",
+            $parameter->getName(),
+            get_debug_type($value),
+            self::reflectionTypeToString($parameter->getType()),
+        ));
     }
 
     /**

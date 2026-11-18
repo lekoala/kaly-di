@@ -4,12 +4,11 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
-use AssertionError;
+use InvalidArgumentException;
 use Kaly\Di\Container;
 use Kaly\Di\Definitions;
 use Kaly\Di\Injector;
 use PHPUnit\Framework\Attributes\DataProvider;
-use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 
 interface CombinedLeft {}
@@ -67,10 +66,9 @@ class CombinedTypesTest extends TestCase
         }
     }
 
-    #[RequiresSetting('zend.assertions', '1')]
     public function testPartialIntersectionDoesNotSatisfyACombinedType(): void
     {
-        $this->expectException(AssertionError::class);
+        $this->expectException(InvalidArgumentException::class);
         $this->expectExceptionMessage("parameter `value` doesn't support");
         (new Injector(new Container()))->invoke(
             fn((CombinedLeft&CombinedRight)|CombinedAlternative $value): object => $value,
@@ -105,7 +103,6 @@ class CombinedTypesTest extends TestCase
         return ['union' => ['union'], 'intersection' => ['intersection'], 'combined' => ['combined']];
     }
 
-    #[RequiresSetting('zend.assertions', '1')]
     #[DataProvider('variadicTypes')]
     public function testInvalidTypedVariadicIsRejectedBeforeResolvingDependencies(string $type): void
     {
@@ -129,7 +126,7 @@ class CombinedTypesTest extends TestCase
         try {
             (new Injector($container))->invoke($callable, values: [new CombinedBoth(), new InheritedTypeBase()]);
             $this->fail('Expected argument validation to reject the invalid variadic value');
-        } catch (AssertionError $e) {
+        } catch (InvalidArgumentException $e) {
             $this->assertStringContainsString("parameter `values` doesn't support", $e->getMessage());
         } finally {
             $this->assertSame(0, $calls, 'Invalid explicit arguments must not run dependency factories');

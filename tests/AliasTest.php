@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Kaly\Tests;
 
+use Kaly\Di\ContainerException;
 use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Tests\Mocks\TestObject;
@@ -99,6 +100,38 @@ class AliasTest extends TestCase
 
         $this->expectException(DefinitionException::class);
         $definitions->callback('alias', fn() => null);
+    }
+
+    /**
+     * The alias type check may autoload the alias id. An autoloader failure
+     * must not escape get() as a raw exception: consumers catch PSR-11 types.
+     */
+    public function testAliasTypeCheckNormalizesAutoloaderErrors(): void
+    {
+        $container = Definitions::create()
+            ->set('target', new TestObject())
+            ->alias('alias', 'target')
+            ->createContainer();
+        $failure = new \RuntimeException('autoload failed');
+        $autoloader = static function (string $class) use ($failure): void {
+            if ($class === 'alias') {
+                throw $failure;
+            }
+        };
+        spl_autoload_register($autoloader);
+
+        try {
+            $this->assertTrue($container->has('alias'));
+            try {
+                $container->get('alias');
+                $this->fail('Expected a ContainerException');
+            } catch (ContainerException $e) {
+                $this->assertSame($failure, $e->getPrevious());
+                $this->assertStringContainsString('`alias`', $e->getMessage());
+            }
+        } finally {
+            spl_autoload_unregister($autoloader);
+        }
     }
 
     public function testAliasIsNotRebindable(): void

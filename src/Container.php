@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Kaly\Di;
 
 use Closure;
+use Psr\Container\ContainerExceptionInterface;
 use Psr\Container\ContainerInterface;
 use Psr\Container\NotFoundExceptionInterface;
 
@@ -90,9 +91,19 @@ class Container implements ContainerInterface
 
         // An alias delegates to its target: same instance, configured once,
         // but it must still honor its own id when that id names a class.
+        // The type check can autoload the alias id: normalize its failures too,
+        // so get() only ever throws PSR-11 exceptions. Already normalized
+        // exceptions (Kaly or third-party) keep their type.
         if ($this->definitions->hasAlias($id)) {
-            $instance = $this->get((string) $this->definitions->getAlias($id));
-            $this->assertMatchesClassId($instance, $id);
+            try {
+                $instance = $this->get((string) $this->definitions->getAlias($id));
+                $this->assertMatchesClassId($instance, $id);
+            } catch (ContainerExceptionInterface $e) {
+                throw $e;
+            } catch (\Throwable $e) {
+                $type = $e::class;
+                throw new ContainerException("Unable to create object `{$id}`, threw exception: `{$type}`", 0, $e);
+            }
             return $this->instances[$id] = $instance;
         }
 

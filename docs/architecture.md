@@ -287,7 +287,9 @@ ambiguous instead of picking one (see [the resolution contract](#the-resolution-
 A direct `has()` call is raw: if checking the id fails (for instance an
 autoloader throwing), the error surfaces as-is. Inside `get()`, the same check
 is wrapped in a `ContainerException` (original error as `previous`), so `get()`
-only ever throws PSR-11 exceptions.
+only ever throws PSR-11 exceptions. The same normalization applies to the type
+check of an alias id, which may autoload that id after the target has already
+been resolved.
 
 ### Resolution failures leave no partial state for the failed service
 

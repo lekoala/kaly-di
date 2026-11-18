@@ -20,6 +20,10 @@ All notable changes to this project are documented in this file.
   production (`'false'` for a `bool` parameter became `true`). The rejection is
   an `InvalidArgumentException`, wrapped in a `ContainerException` by
   `Container::get()`.
+- `get()` normalizes errors raised while checking an alias id, for instance an
+  autoloader throwing during the alias type check. `has()` and `get()` therefore
+  keep their documented contracts, and the original error remains available as
+  `previous`.
 
 ## [0.4.1]
 

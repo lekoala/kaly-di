@@ -29,6 +29,11 @@ use Psr\Container\ContainerInterface;
  * The real validation of a composition is its test suite: building each real
  * configuration and resolving its real entry points exercises every visited
  * path. Kaly deliberately does not audit the whole graph ahead of time.
+ *
+ * Read API: has(), get(), getAliases(), parametersFor() and callbacksFor().
+ * The raw storage accessors (getValues(), getSources(), getParameters(),
+ * getCallbacks()) and expand() are internal plumbing used by merge() and the
+ * Container; they are not part of the supported public API.
  */
 final class Definitions
 {
@@ -204,6 +209,7 @@ final class Definitions
     }
 
     /**
+     * @internal Raw provenance map used by merge() and diagnostics.
      * @return array<string,array{initial:?string,last:?string}>
      */
     public function getSources(): array
@@ -223,6 +229,7 @@ final class Definitions
     }
 
     /**
+     * @internal Raw definition map used by merge() and the Container.
      * @return array<string,class-string|object>
      */
     public function getValues(): array
@@ -231,6 +238,7 @@ final class Definitions
     }
 
     /**
+     * @internal Raw callback map used by merge().
      * @return array<string,array<string|int,Closure>>
      */
     public function getCallbacks(): array
@@ -239,6 +247,7 @@ final class Definitions
     }
 
     /**
+     * @internal Raw parameter map used by merge().
      * @return array<string,array<string,mixed>>
      */
     public function getParameters(): array
@@ -280,6 +289,7 @@ final class Definitions
     /**
      * Similar to get, but expand any lazy closure using the container.
      *
+     * @internal Runtime helper used by Container::build().
      * @return string|object|null
      */
     public function expand(string $id, ContainerInterface $container): string|object|null

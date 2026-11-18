@@ -53,6 +53,9 @@ All notable changes to this project are documented in this file.
 - Documented the `stdClass` exception to the "no reserved ids" rule, the order
   and guarantees of the `Container::build()` / `configure()` extension hooks, and
   that `Parameters` is internal.
+- Classified the `Definitions` read methods: `has()`, `get()`, `getAliases()`,
+  `parametersFor()` and `callbacksFor()` are the read API, while the raw storage
+  accessors and `expand()` are marked `@internal`.
 
 ### Changed
 

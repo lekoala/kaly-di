@@ -36,8 +36,8 @@ final class Injector
      * Invoke any callable and resolve object dependencies using the container.
      * You can pass named arguments or positional arguments with ...$arguments
      *
-     * `$callable` and `$arguments` are this signature's own parameter names: a
-     * target parameter with the same name must be passed positionally.
+     * `$callable` is this signature's own first parameter name: a target
+     * parameter named `$callable` must be passed positionally.
      *
      * @param callable $callable
      * @param mixed ...$arguments
@@ -78,8 +78,8 @@ final class Injector
      * other argument must be provided explicitly, have a default value or be
      * nullable. An interface or abstract class cannot be built.
      *
-     * `$class` and `$arguments` are this signature's own parameter names: a
-     * constructor parameter with the same name must be passed positionally.
+     * `$class` is this signature's own first parameter name: a constructor
+     * parameter named `$class` must be passed positionally.
      *
      * @template T of object
      * @param class-string<T> $class

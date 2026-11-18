@@ -179,9 +179,10 @@ $result = $injector->invoke($concat, ...['value1', 'value2']);
 ## Parameter Names Owned by the Injector
 
 `invoke()` and `make()` declare their first parameter (`$callable` / `$class`) and
-a variadic `$arguments`. A named argument with one of those first names is
-consumed by the injector signature before argument resolution, which PHP rejects
-as a double assignment:
+a variadic `$arguments`. A named argument matching the method's own first
+parameter (`callable:` for `invoke()`, `class:` for `make()`) is consumed by the
+injector signature before argument resolution, which PHP rejects as a double
+assignment:
 
 ```php
 // Both fail before the injector sees the argument:
@@ -189,12 +190,15 @@ $injector->make(HasClassParameter::class, class: 'value');
 $injector->invoke($fn, callable: 'value');
 ```
 
-Pass those target parameters positionally when needed:
+Pass that target parameter positionally when needed:
 
 ```php
 $injector->make(HasClassParameter::class, 'value');
 $injector->invoke($fn, 'value');
 ```
+
+Other names, including a target `$arguments` parameter, can still be passed by
+name.
 
 ## By-Reference Parameters Are Rejected
 

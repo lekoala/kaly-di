@@ -47,9 +47,9 @@ All notable changes to this project are documented in this file.
 
 ### Documentation
 
-- Documented that `$callable` / `$class` are owned by the `Injector` signature: a
-  target parameter with that name must be passed positionally. Documented the
-  by-reference rejection.
+- Documented that `$callable` (for `invoke()`) and `$class` (for `make()`) are
+  owned by the `Injector` signature: a target parameter with that name must be
+  passed positionally. Documented the by-reference rejection.
 - Documented the `stdClass` exception to the "no reserved ids" rule, the order
   and guarantees of the `Container::build()` / `configure()` extension hooks, and
   that `Parameters` is internal.

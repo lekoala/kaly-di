@@ -9,9 +9,11 @@ use Closure;
 use Kaly\Di\DefinitionException;
 use Kaly\Di\Definitions;
 use Kaly\Tests\Mocks\TestAlternativeObject;
+use Kaly\Tests\Mocks\TestAltInterface;
 use Kaly\Tests\Mocks\TestInterface;
 use Kaly\Tests\Mocks\TestObject;
 use Kaly\Tests\Mocks\TestObject2;
+use Kaly\Tests\Mocks\TestObject6;
 use PHPUnit\Framework\Attributes\RequiresSetting;
 use PHPUnit\Framework\TestCase;
 
@@ -71,6 +73,42 @@ class DefinitionsOverrideTest extends TestCase
             ->rebind(TestInterface::class, TestAlternativeObject::class);
 
         $this->assertSame(TestAlternativeObject::class, $def->get(TestInterface::class));
+    }
+
+    public function testRebindKeepsConfigurationByDefault(): void
+    {
+        $callback = static fn(TestInterface $service) => $service->setVal('configured');
+        $definitions = Definitions::create()->bind(TestInterface::class, TestObject6::class, [
+            'v' => 'initial',
+        ])->callback(TestInterface::class, $callback)->rebind(TestInterface::class, TestObject::class);
+
+        $this->assertSame(['v' => 'initial'], $definitions->parametersFor(TestInterface::class));
+        $this->assertSame([$callback], array_values($definitions->callbacksFor(TestInterface::class)));
+    }
+
+    public function testRebindCanResetOnlyTheConfigurationForTheReplacedId(): void
+    {
+        $definitions = Definitions::create()
+            ->bind(TestInterface::class, TestObject::class, ['obsolete' => 1])
+            ->callback(TestInterface::class, fn() => $this->fail('The original callback must not run'))
+            ->bind(TestAltInterface::class, TestObject6::class, ['v' => 'other binding'])
+            ->callback(TestAltInterface::class, static fn(TestObject6 $service) => $service->v3 = 'interface callback')
+            ->parameters(TestObject6::class, v: 'class value', v2: 'original default', arr: [])
+            ->callback(TestObject6::class, static fn(TestObject6 $service) => $service->arr[] = 'class callback')
+            ->rebind(TestInterface::class, TestObject6::class, expected: TestObject::class, resetConfiguration: true)
+            ->parameters(TestInterface::class, v2: 'new value');
+
+        $this->assertSame(['v2' => 'new value'], $definitions->parametersFor(TestInterface::class));
+        $this->assertSame([], $definitions->callbacksFor(TestInterface::class));
+
+        $container = $definitions->createContainer();
+        $service = $container->get(TestInterface::class);
+        $this->assertInstanceOf(TestObject6::class, $service);
+        $this->assertSame('class value', $service->v);
+        $this->assertSame('new value', $service->v2);
+        $this->assertSame('interface callback', $service->v3);
+        $this->assertSame(['class callback'], $service->arr);
+        $this->assertSame('other binding', $container->get(TestAltInterface::class)->getVal());
     }
 
     public function testRebindCanReplaceASetDefinition(): void
@@ -194,19 +232,29 @@ class DefinitionsOverrideTest extends TestCase
         $this->assertSame(TestAlternativeObject::class, $def->get(TestInterface::class));
     }
 
-    public function testRebindWithMismatchedExpectedIsRejected(): void
+    public function testRebindWithMismatchedExpectedLeavesTheDefinitionAndItsConfigurationIntact(): void
     {
-        $def = Definitions::create()->bind(TestInterface::class, TestObject::class);
+        $callback = static fn(TestInterface $service) => $service->setVal('configured');
+        $def = Definitions::create()->bind(TestInterface::class, TestObject6::class, [
+            'v' => 'initial',
+        ])->callback(TestInterface::class, $callback);
 
         try {
-            $def->rebind(TestInterface::class, TestAlternativeObject::class, expected: TestObject2::class);
+            $def->rebind(
+                TestInterface::class,
+                TestAlternativeObject::class,
+                expected: TestObject::class,
+                resetConfiguration: true,
+            );
             $this->fail('A mismatched expected precondition must be rejected');
         } catch (DefinitionException $e) {
             $this->assertStringContainsString('expected', $e->getMessage());
             $this->assertStringContainsString('currently defined', $e->getMessage());
         }
 
-        $this->assertSame(TestObject::class, $def->get(TestInterface::class));
+        $this->assertSame(TestObject6::class, $def->get(TestInterface::class));
+        $this->assertSame(['v' => 'initial'], $def->parametersFor(TestInterface::class));
+        $this->assertSame([$callback], array_values($def->callbacksFor(TestInterface::class)));
     }
 
     public function testRebindExpectedComparesObjectIdentityNotEquality(): void

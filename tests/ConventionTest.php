@@ -201,7 +201,6 @@ class ConventionTest extends TestCase
             'candidate' => DateTimeImmutable::class,
             'from' => self::FROM,
             'to' => self::TO,
-            'source' => null,
         ]);
     }
 
@@ -302,7 +301,7 @@ class ConventionTest extends TestCase
     public function testMergeRejectsDuplicateConventionsAtomically(): void
     {
         $target = $this->definitions();
-        $incoming = Definitions::create()->bindConvention(self::FROM, self::TO, source: 'incoming');
+        $incoming = Definitions::create()->bindConvention(self::FROM, self::TO);
 
         try {
             $target->merge($incoming);
@@ -352,7 +351,6 @@ class ConventionTest extends TestCase
 
         // Resolution never materializes bindings into the locked definitions.
         $this->assertFalse($definitions->has(Appointments::class));
-        $this->assertSame([], $definitions->getSources()[Appointments::class] ?? []);
     }
 
     public function testCapturesAcceptNonAsciiIdentifiers(): void

@@ -22,39 +22,14 @@ final class DefinitionGuard
      *
      * @param array<string,class-string|object> $values
      * @param array<string,string> $aliases
-     * @param array<string,array{initial:?string,last:?string}> $sources
      */
-    public static function assertNotDefined(array $values, array $aliases, array $sources, string $id): void
+    public static function assertNotDefined(array $values, array $aliases, string $id): void
     {
         if (array_key_exists($id, $values) || array_key_exists($id, $aliases)) {
-            $suffix = self::describeSources($sources[$id] ?? []);
             throw new DefinitionException(
-                "Service `{$id}` is already defined{$suffix}. Use rebind() if replacing it is intentional.",
+                "Service `{$id}` is already defined (use rebind() for an intentional replacement)",
             );
         }
-    }
-
-    /**
-     * Human-readable provenance for error messages, e.g.
-     * ` (declared by `billing`; replaced by `demo`; incoming from `catalog`)`.
-     *
-     * @param array{initial?:?string,last?:?string} $source
-     */
-    public static function describeSources(array $source, ?string $incoming = null): string
-    {
-        $parts = [];
-        $initial = $source['initial'] ?? null;
-        $last = $source['last'] ?? null;
-        if ($initial !== null) {
-            $parts[] = "declared by `{$initial}`";
-        }
-        if ($last !== null && $last !== $initial) {
-            $parts[] = "replaced by `{$last}`";
-        }
-        if ($incoming !== null) {
-            $parts[] = "incoming from `{$incoming}`";
-        }
-        return $parts === [] ? '' : ' (' . implode('; ', $parts) . ')';
     }
 
     /**

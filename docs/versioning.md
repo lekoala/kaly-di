@@ -4,10 +4,9 @@ kaly-di follows [SemVer](https://semver.org). Before 1.0, a minor release may
 break; after 1.0, only a major does. This page states what the promise covers,
 so that "breaking" has a precise meaning before and after 1.0.
 
-`0.5` is the stabilization release: it ships the surface that 1.0 intends to
-freeze, so real compositions — Kaly first — can validate it against their own
-suites. Unless that validation reports a friction, `1.0` adds nothing: it
-removes the pre-1.0 disclaimer from this page.
+Stabilization started with `0.5`. The remaining contract changes are listed
+in [UPGRADE.md](../UPGRADE.md). Real compositions such as Kaly validate
+that API against their own suites before `1.0` freezes it.
 
 ## Tiers
 
@@ -31,7 +30,7 @@ verify a contract.
   `set()`, `bind()`, `bindConvention()`, `alias()`, `parameter()`,
   `parameters()`, `callback()`, `rebind()`, `merge()`, `lock()`,
   `isLocked()`, `createContainer()`; and the read API — `has()`, `get()`,
-  `getAliases()`, `parametersFor()`, `callbacksFor()`, `sourceFor()`.
+  `getAliases()`, `parametersFor()`, `callbacksFor()`.
 - `Reflection` (`@api`): `tryClass()`, `getParameterTypeName()`,
   `getParameterClass()`, `getClassName()`, `getShortClassName()`,
   `getClassNamespace()`.
@@ -57,7 +56,7 @@ normalized by `get()` (see [architecture](./architecture.md)).
   features (see [architecture](./architecture.md)).
 - Everything marked `@internal`: `Parameters`, `ArgumentGuard`, `TypeMatcher`,
   `ReflectionCache`, `DefinitionGuard`, `AliasValidator`, `ConventionRule`,
-  and the `Definitions` plumbing (`getValues()`, `getSources()`,
+  and the `Definitions` plumbing (`getValues()`,
   `getParameters()`, `getCallbacks()`, `hasAlias()`, `getAlias()`,
   `allParametersFor()`, `callbacksForClass()`, `conventionCandidates()`,
   `expand()`).

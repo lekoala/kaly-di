@@ -98,6 +98,22 @@ class DefinitionsTest extends TestCase
         $this->assertSame($callbackB, $callbacks[1]);
     }
 
+    public function testConfigurationMethodSignatures(): void
+    {
+        $signatures = [
+            'set' => ['id', 'value'],
+            'bind' => ['abstract', 'concrete', 'parameters'],
+            'bindConvention' => ['from', 'to'],
+            'rebind' => ['id', 'value', 'expected', 'resetConfiguration'],
+        ];
+
+        foreach ($signatures as $method => $names) {
+            $parameters = (new ReflectionMethod(Definitions::class, $method))->getParameters();
+            $this->assertSame($names, array_map(static fn($parameter) => $parameter->getName(), $parameters), $method);
+        }
+        $this->assertFalse(method_exists(Definitions::class, 'sourceFor'));
+    }
+
     public function testNullIsNotAValidDefinition(): void
     {
         $method = new ReflectionMethod(Definitions::class, 'set');

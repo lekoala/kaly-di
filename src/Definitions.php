@@ -28,9 +28,9 @@ use Psr\Container\ContainerInterface;
  * configuration and resolving its real entry points exercises every visited
  * path. Kaly deliberately does not audit the whole graph ahead of time.
  *
- * Read API: has(), get(), getAliases(), parametersFor(), callbacksFor() and
- * sourceFor(). The raw storage accessors (getValues(), getSources(),
- * getParameters(), getCallbacks()), the runtime helpers used by the Container
+ * Read API: has(), get(), getAliases(), parametersFor() and callbacksFor().
+ * The raw storage accessors (getValues(), getParameters(), getCallbacks()),
+ * the runtime helpers used by the Container
  * (hasAlias(), getAlias(), allParametersFor(), callbacksForClass(),
  * conventionCandidates()) and expand() are internal plumbing; they are not
  * part of the supported public API.
@@ -57,17 +57,6 @@ final class Definitions
      * @var array<string,string>
      */
     private array $aliases = [];
-
-    /**
-     * Optional provenance per id, for diagnostics only.
-     *
-     * The initial declaration source is preserved across rebind(), which only
-     * updates `last`. This is what lets an error explain "declared by X,
-     * replaced by Y".
-     *
-     * @var array<string,array{initial:?string,last:?string}>
-     */
-    private array $sources = [];
 
     /**
      * Defines callbacks to be called after an object is instantiated
@@ -149,15 +138,9 @@ final class Definitions
 
         if ($collisions !== []) {
             sort($collisions);
-            $incomingSources = $definitions->getSources();
-            $list = implode("\n", array_map(function (string $id) use ($incomingSources): string {
-                $incomingSource = $incomingSources[$id]['initial'] ?? $incomingSources[$id]['last'] ?? null;
-                return '- ' . $id . DefinitionGuard::describeSources($this->sources[$id] ?? [], $incomingSource);
-            }, $collisions));
+            $list = '- ' . implode("\n- ", $collisions);
             throw new DefinitionException(
-                "Cannot merge definitions: the following service ids are already defined:\n{$list}\n"
-                . 'Merge is additive and never overrides services. '
-                . 'Use rebind() explicitly for intentional replacements.',
+                "Cannot merge definitions because the following service ids are already defined (use rebind() for intentional replacements):\n{$list}",
             );
         }
 
@@ -183,7 +166,6 @@ final class Definitions
         // Build the whole result first: a failed merge must leave this object untouched.
         $values = array_replace($this->values, $incoming);
         $aliases = array_replace($this->aliases, $incomingAliases);
-        $sources = array_replace($this->sources, $definitions->getSources());
         $conventions = [...$this->conventions, ...$definitions->conventions];
 
         $callbacks = $this->callbacks;
@@ -200,32 +182,11 @@ final class Definitions
 
         $this->values = $values;
         $this->aliases = $aliases;
-        $this->sources = $sources;
         $this->conventions = $conventions;
         $this->callbacks = $callbacks;
         $this->parameters = $parameters;
 
         return $this;
-    }
-
-    /**
-     * @internal Raw provenance map used by merge() and diagnostics.
-     * @return array<string,array{initial:?string,last:?string}>
-     */
-    public function getSources(): array
-    {
-        return $this->sources;
-    }
-
-    /**
-     * Provenance of an id (empty array when none was declared).
-     *
-     * @return array{initial?:?string,last?:?string}
-     */
-    public function sourceFor(string $id): array
-    {
-        $id = DefinitionGuard::normalizeId($id);
-        return $this->sources[$id] ?? [];
     }
 
     /**
@@ -315,13 +276,12 @@ final class Definitions
      * Add an entry
      *
      * @param class-string|object $value
-     * @param string|null $source Optional provenance label, for diagnostics
      */
-    public function set(string $id, string|object $value, ?string $source = null): self
+    public function set(string $id, string|object $value): self
     {
         $this->assertNotLocked();
         $id = self::writableId($id);
-        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $id);
+        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $id);
         DefinitionGuard::assertUsableId($id);
         DefinitionGuard::assertValidDefinition($id, $value);
         assert(
@@ -329,7 +289,6 @@ final class Definitions
             DefinitionGuard::replacementMismatch($id, $value),
         );
         $this->values[$id] = $value;
-        $this->sources[$id] = ['initial' => $source, 'last' => $source];
         return $this;
     }
 
@@ -342,19 +301,17 @@ final class Definitions
      * @param class-string $abstract
      * @param class-string $concrete
      * @param array<string,mixed> $parameters Constructor arguments configured for $abstract
-     * @param string|null $source Optional provenance label, for diagnostics
      */
-    public function bind(string $abstract, string $concrete, array $parameters = [], ?string $source = null): self
+    public function bind(string $abstract, string $concrete, array $parameters = []): self
     {
         $this->assertNotLocked();
         $abstract = self::writableId($abstract);
-        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $abstract);
+        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $abstract);
         DefinitionGuard::assertUsableId($abstract);
         assert(interface_exists($abstract) || class_exists($abstract), "Abstraction `{$abstract}` does not exist");
         assert(class_exists($concrete), "Class `{$concrete}` does not exist");
         assert(is_a($concrete, $abstract, true), "Class `{$concrete}` does not implement `{$abstract}`");
         $this->values[$abstract] = $concrete;
-        $this->sources[$abstract] = ['initial' => $source, 'last' => $source];
         foreach ($parameters as $name => $value) {
             $this->parameter($abstract, (string) $name, $value);
         }
@@ -382,13 +339,11 @@ final class Definitions
      * allowed at registration; when several match the same requested
      * interface, resolution fails instead of picking one. Only existing
      * interfaces are eligible, and only at resolution time.
-     *
-     * @param string|null $source Optional provenance label, for diagnostics
      */
-    public function bindConvention(string $from, string $to, ?string $source = null): self
+    public function bindConvention(string $from, string $to): self
     {
         $this->assertNotLocked();
-        $rule = ConventionRule::parse($from, $to, $source);
+        $rule = ConventionRule::parse($from, $to);
         foreach ($this->conventions as $existing) {
             if ($existing->from === $rule->from) {
                 throw new DefinitionException(
@@ -408,7 +363,7 @@ final class Definitions
      * interfaces) and how to report zero, one or several matches.
      *
      * @param class-string $id
-     * @return list<array{candidate:string,from:string,to:string,source:?string}>
+     * @return list<array{candidate:string,from:string,to:string}>
      *
      * @internal
      */
@@ -423,7 +378,6 @@ final class Definitions
                     'candidate' => $candidate,
                     'from' => $rule->from,
                     'to' => $rule->to,
-                    'source' => $rule->source,
                 ];
             }
         }
@@ -448,7 +402,7 @@ final class Definitions
         $alias = self::writableId($alias);
         $target = self::writableId($target);
         DefinitionGuard::assertUsableId($alias);
-        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $this->sources, $alias);
+        DefinitionGuard::assertNotDefined($this->values, $this->aliases, $alias);
 
         if (!array_key_exists($target, $this->values) && !array_key_exists($target, $this->aliases)) {
             throw new DefinitionException(
@@ -527,13 +481,13 @@ final class Definitions
      *
      * @param class-string|object $value
      * @param class-string|object|null $expected Guard: the id must currently be defined as this exact value
-     * @param string|null $source Optional provenance label for this replacement
+     * @param bool $resetConfiguration Clear constructor parameters and callbacks registered under $id
      */
     public function rebind(
         string $id,
         string|object $value,
         string|object|null $expected = null,
-        ?string $source = null,
+        bool $resetConfiguration = false,
     ): self {
         $this->assertNotLocked();
         $id = self::writableId($id);
@@ -560,11 +514,9 @@ final class Definitions
         );
 
         $this->values[$id] = $value;
-        // Preserve the initial provenance across replacements, but always record
-        // the latest replacement source: a source-less replacement must not keep
-        // claiming the previous one.
-        $initial = $this->sources[$id]['initial'] ?? null;
-        $this->sources[$id] = ['initial' => $initial, 'last' => $source];
+        if ($resetConfiguration) {
+            unset($this->parameters[$id], $this->callbacks[$id]);
+        }
         return $this;
     }
 

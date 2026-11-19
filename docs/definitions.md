@@ -310,21 +310,6 @@ Parameters and callbacks keep their existing merge semantics (later values win
 per key): they customize a definition rather than choosing which implementation
 owns a service.
 
-### Provenance
-
-`set()`, `bind()` and `rebind()` accept an optional `source` label, used only for
-diagnostics. It lets collisions and replacements explain who owns what:
-
-```php
-$definitions->bind(StorageInterface::class, DatabaseStorage::class, source: 'core');
-$definitions->rebind(StorageInterface::class, InMemoryStorage::class, source: 'demo');
-```
-
-`rebind()` keeps the initial source and records the replacement, so an error can
-read `declared by \`core\`; replaced by \`demo\``. Sources are read back with
-`sourceFor()`, never trigger autoload or reflection, and have no effect on
-resolution.
-
 ### Replacing a Definition
 
 `rebind()` is the only operation that deliberately replaces an existing service
@@ -351,6 +336,29 @@ $definitions->rebind(HttpClientInterface::class, fn (ContainerInterface $c) => n
 
 Rebinding an id that does not exist is an error, not a new definition: use
 `set()` or `bind()` for that.
+
+#### Resetting a Service’s Configuration
+
+By default, `rebind()` keeps the constructor parameters and callbacks registered
+for the service id. Use `resetConfiguration: true` when the replacement needs
+different configuration:
+
+```php
+$definitions
+    ->rebind(
+        MailerInterface::class,
+        FakeMailer::class,
+        expected: SmtpMailer::class,
+        resetConfiguration: true,
+    )
+    ->parameters(MailerInterface::class, messages: []);
+```
+
+The reset clears the constructor parameters and callbacks registered under
+`MailerInterface::class`. Configuration under other ids still applies according
+to the usual constructor parameter and callback lookup rules. If the
+`expected:` guard rejects the replacement, the definition and its configuration
+remain intact.
 
 #### Guarding a Replacement
 

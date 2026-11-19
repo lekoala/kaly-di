@@ -34,8 +34,6 @@ final class ConventionRule
 
     public readonly string $to;
 
-    public readonly ?string $source;
-
     private readonly string $regex;
 
     /** @var list<string> */
@@ -44,16 +42,15 @@ final class ConventionRule
     /**
      * @param list<string> $fromVars
      */
-    private function __construct(string $from, string $to, ?string $source, string $regex, array $fromVars)
+    private function __construct(string $from, string $to, string $regex, array $fromVars)
     {
         $this->from = $from;
         $this->to = $to;
-        $this->source = $source;
         $this->regex = $regex;
         $this->fromVars = $fromVars;
     }
 
-    public static function parse(string $from, string $to, ?string $source = null): self
+    public static function parse(string $from, string $to): self
     {
         $from = DefinitionGuard::normalizeId($from);
         $to = DefinitionGuard::normalizeId($to);
@@ -91,7 +88,7 @@ final class ConventionRule
             );
         }
 
-        return new self($from, $to, $source, self::compile($from), array_values(array_unique($fromVars)));
+        return new self($from, $to, self::compile($from), array_values(array_unique($fromVars)));
     }
 
     /**
@@ -113,8 +110,7 @@ final class ConventionRule
 
     public function describe(): string
     {
-        $base = "`{$this->from}` => `{$this->to}`";
-        return $this->source !== null ? "{$base} (declared by `{$this->source}`)" : $base;
+        return "`{$this->from}` => `{$this->to}`";
     }
 
     /**
@@ -148,10 +144,10 @@ final class ConventionRule
             return null;
         }
         if (count($candidates) > 1) {
-            $lines = array_map(static function (array $candidate): string {
-                $line = "- `{$candidate['from']}` => `{$candidate['to']}`";
-                return $candidate['source'] !== null ? "{$line} (declared by `{$candidate['source']}`)" : $line;
-            }, $candidates);
+            $lines = array_map(
+                static fn(array $candidate): string => "- `{$candidate['from']}` => `{$candidate['to']}`",
+                $candidates,
+            );
             throw new DefinitionException(
                 "Cannot resolve `{$id}`: several conventions match:\n"
                 . implode("\n", $lines)
@@ -161,9 +157,8 @@ final class ConventionRule
         $match = $candidates[0];
         $class = $match['candidate'];
         if (!class_exists($class)) {
-            $source = $match['source'] !== null ? " (declared by `{$match['source']}`)" : '';
             throw new ContainerException(
-                "Class `{$class}` does not exist (via convention `{$match['from']}` => `{$match['to']}` for `{$id}`{$source}).",
+                "Class `{$class}` does not exist (via convention `{$match['from']}` => `{$match['to']}` for `{$id}`)",
             );
         }
         self::assertCandidate($id, $class, $match);
@@ -174,26 +169,25 @@ final class ConventionRule
      * A convention candidate must be a usable implementation, like an explicit
      * binding: compatible, instantiable, and user-defined.
      *
-     * @param array{candidate:string,from:string,to:string,source:?string} $match
+     * @param array{candidate:string,from:string,to:string} $match
      * @throws DefinitionException
      */
     private static function assertCandidate(string $id, string $class, array $match): void
     {
         $via = "`{$match['from']}` => `{$match['to']}`";
-        $source = $match['source'] !== null ? " (declared by `{$match['source']}`)" : '';
         if (!is_a($class, $id, true)) {
             throw new DefinitionException(
-                "The convention {$via} for `{$id}` produced `{$class}`, which does not implement `{$id}`{$source}.",
+                "The convention {$via} for `{$id}` produced `{$class}`, which does not implement `{$id}`",
             );
         }
         if (!ReflectionCache::isInstantiable($class)) {
             throw new DefinitionException(
-                "The convention {$via} for `{$id}` produced `{$class}`, which is not instantiable{$source}.",
+                "The convention {$via} for `{$id}` produced `{$class}`, which is not instantiable",
             );
         }
         if (ReflectionCache::reflection($class)[0]->isInternal()) {
             throw new DefinitionException(
-                "The convention {$via} for `{$id}` produced `{$class}`, which is an internal PHP class and must be defined explicitly{$source}.",
+                "The convention {$via} for `{$id}` produced `{$class}`, which is an internal PHP class and must be defined explicitly",
             );
         }
     }

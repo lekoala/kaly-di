@@ -4,15 +4,12 @@ The `Definitions` object is where you configure your dependency injection contai
 It provides a fluent API for mapping identifiers to classes, objects, or closures,
 and for declaring constructor parameters and post-construction callbacks.
 
-The primitives are orthogonal: each method does exactly one thing.
-
 ```php
 use Kaly\Di\Definitions;
 
 $definitions = Definitions::create()
     ->set(\PDO::class, fn () => new \PDO('sqlite::memory:'))
-    ->bind(LoggerInterface::class, FileLogger::class)
-    ->parameters(FileLogger::class, path: '/var/log/app.log')
+    ->bind(LoggerInterface::class, FileLogger::class, ['path' => '/var/log/app.log'])
     ->callback(FileLogger::class, fn (FileLogger $logger) => $logger->open());
 ```
 
@@ -62,6 +59,10 @@ concrete implementation.
 $definitions->bind(UserRepositoryInterface::class, SqlUserRepository::class);
 $definitions->bind(AbstractHandler::class, LoggingHandler::class);
 ```
+
+The optional third argument is an array of named constructor arguments for the
+abstract service id. Each value follows the same rules as
+[`parameters()`](#setting-parameters).
 
 The concrete class must be compatible with the abstraction. Configuration stays
 explicit: there is no "single interface" auto-detection.
@@ -200,7 +201,9 @@ $definitions
 ```
 
 When an id is bound to a class, parameters can be declared for either the id or the
-concrete class. The id takes precedence.
+concrete class. The id takes precedence. Pass the named values directly to
+`bind()` when they belong to that binding. A later `parameters()` or
+`parameter()` call for the same id can add or replace values.
 
 A configured value always wins, `null` included. This is how to keep an optional
 dependency such as `?Logger $logger = null` empty: without configuration it is

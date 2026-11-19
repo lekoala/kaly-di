@@ -22,7 +22,7 @@ class ProvenanceTest extends TestCase
         $definitions = Definitions::create()->set('service', TestObject::class, 'billing')->bind(
             \Kaly\Tests\Mocks\TestInterface::class,
             TestObject::class,
-            'catalog',
+            source: 'catalog',
         );
 
         $this->assertSame(['initial' => 'billing', 'last' => 'billing'], $definitions->sourceFor('service'));

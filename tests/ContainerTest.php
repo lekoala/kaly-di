@@ -515,17 +515,30 @@ class ContainerTest extends TestCase
 
     public function testAltInterfaceRemainsDistinct(): void
     {
+        $resolved = false;
         $definitions = Definitions::create()
-            ->bind(TestInterface::class, TestObject6::class)
-            ->bind(TestAltInterface::class, TestObject6::class)
-            ->parameters(TestObject6::class, v: 'v', v2: 'v2', arr: []);
+            ->bind(TestInterface::class, TestObject6::class, [
+                'v' => static function () use (&$resolved): string {
+                    $resolved = true;
+                    return 'first';
+                },
+                'v2' => 'from binding',
+            ])
+            ->bind(TestAltInterface::class, TestObject6::class, ['v' => 'alt'])
+            ->parameters(TestObject6::class, v: 'default', v2: 'v2', arr: [])
+            ->parameters(TestInterface::class, v2: 'from parameters');
         $di = new Container($definitions);
+        $this->assertFalse($resolved);
 
         $first = $di->get(TestInterface::class);
         $alt = $di->get(TestAltInterface::class);
 
-        // Cached by service id, so two distinct instances of the same class
+        $this->assertTrue($resolved);
         $this->assertNotSame($first, $alt);
-        $this->assertEquals($first, $alt);
+        $this->assertSame('first', $first->getVal());
+        $this->assertSame('alt', $alt->getVal());
+        $this->assertSame('from parameters', $first->v2);
+        $this->assertSame('v2', $alt->v2);
+        $this->assertSame('default', $di->get(TestObject6::class)->v);
     }
 }

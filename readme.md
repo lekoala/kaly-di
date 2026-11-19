@@ -72,10 +72,11 @@ explicitly at the composition root:
 
 ```php
 $definitions = Definitions::create()
-    ->bind(LoggerInterface::class, FileLogger::class)
+    ->bind(LoggerInterface::class, FileLogger::class, ['path' => '/var/log/app.log'])
     ->parameters(LogWriter::class, path: '/var/log/app.log', retries: 3);
 
 $container = new Container($definitions);
+$logger = $container->get(LoggerInterface::class);
 $writer = $container->get(LogWriter::class);
 ```
 

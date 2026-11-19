@@ -14,8 +14,6 @@ use Psr\Container\ContainerInterface;
  * objects, or factory closures. Also manages constructor parameters and
  * post-construction callbacks.
  *
- * The primitives are orthogonal: each method does exactly one thing.
- *
  * Invalid configuration is reported in two ways, based on its cost:
  *
  * - Unconditional configuration invariants (locking, duplicate ids, merge
@@ -343,9 +341,10 @@ final class Definitions
      *
      * @param class-string $abstract
      * @param class-string $concrete
+     * @param array<string,mixed> $parameters Constructor arguments configured for $abstract
      * @param string|null $source Optional provenance label, for diagnostics
      */
-    public function bind(string $abstract, string $concrete, ?string $source = null): self
+    public function bind(string $abstract, string $concrete, array $parameters = [], ?string $source = null): self
     {
         $this->assertNotLocked();
         $abstract = self::writableId($abstract);
@@ -356,6 +355,9 @@ final class Definitions
         assert(is_a($concrete, $abstract, true), "Class `{$concrete}` does not implement `{$abstract}`");
         $this->values[$abstract] = $concrete;
         $this->sources[$abstract] = ['initial' => $source, 'last' => $source];
+        foreach ($parameters as $name => $value) {
+            $this->parameter($abstract, (string) $name, $value);
+        }
         return $this;
     }
 

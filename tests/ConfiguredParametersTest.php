@@ -231,6 +231,20 @@ class ConfiguredParametersTest extends TestCase
         $container->get(TestQueueJob::class);
     }
 
+    public function testUnknownBindingParametersAreRejectedBeforeClosuresRun(): void
+    {
+        $container = Definitions::create()
+            ->bind(TestQueueJob::class, TestQueueWorker::class, [
+                'queue' => fn() => $this->fail('The parameter closure must not run'),
+                'queeu' => 'invalid',
+            ])
+            ->createContainer();
+
+        $this->expectException(DefinitionException::class);
+        $this->expectExceptionMessage('Unknown configured parameter(s)');
+        $container->get(TestQueueJob::class);
+    }
+
     /**
      * Characterization of the Container path: the signature checks run while
      * the argument list is built, after the configured closures. A

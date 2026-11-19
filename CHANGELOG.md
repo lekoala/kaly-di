@@ -2,6 +2,13 @@
 
 All notable changes to this project are documented in this file.
 
+## [Unreleased]
+
+- **Breaking:** `bind()` accepts an array of named constructor arguments as its
+  third argument. The values apply to the abstract service id, so each binding
+  can configure its own instance of the concrete class. Pass a provenance
+  label as `source:` or as the fourth positional argument. See [UPGRADE.md](UPGRADE.md).
+
 ## [0.5.0]
 
 ### Fixed
